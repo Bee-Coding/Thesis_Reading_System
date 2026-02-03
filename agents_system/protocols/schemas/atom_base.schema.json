@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thesis-reading-system.example/schemas/atom_base.schema.json",
+  "title": "原子基础结构",
+  "description": "定义Thesis_Reading_System中所有知识原子的基础JSON Schema",
+  "type": "object",
+  "properties": {
+    "asset_id": {
+      "type": "string",
+      "description": "资产唯一标识符",
+      "pattern": "^(MATH|CODE|SCENARIO|DECISION|ERROR)_[A-Za-z0-9_]+_[0-9]{2}$",
+      "examples": [
+        "MATH_PLAN_DIFF_01",
+        "CODE_DIFF_SAMPLER_01",
+        "SCENARIO_AVP_LIGHT_01",
+        "DECISION_E2E_DIFF_01"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "description": "原子类别",
+      "enum": ["Math_Ops", "Code_Snippets", "Scenarios", "Strategic", "Error"],
+      "default": "Math_Ops"
+    },
+    "data_status": {
+      "type": "string",
+      "description": "数据验证状态",
+      "enum": [
+        "Verified_Source_Anchored",
+        "Unverified_No_Source",
+        "Partially_Verified",
+        "Contradiction_Detected"
+      ],
+      "default": "Unverified_No_Source"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "元数据",
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601格式创建时间戳"
+        },
+        "created_by": {
+          "type": "string",
+          "description": "创建此原子的Agent名称",
+          "enum": [
+            "Scholar_Internalizer",
+            "Code_Architect",
+            "Scenario_Validator",
+            "Strategic_Critic"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "description": "原子版本号",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "examples": ["1.0", "2.1"]
+        },
+        "tags": {
+          "type": "array",
+          "description": "技术标签列表",
+          "items": {
+            "type": "string",
+            "pattern": "^#[A-Za-z0-9_]+$",
+            "maxLength": 30
+          },
+          "maxItems": 5,
+          "default": []
+        }
+      },
+      "required": ["created_at", "created_by", "version", "tags"]
+    },
+    "content": {
+      "type": "object",
+      "description": "具体内容字段，根据原子类别变化",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/math_content"
+        },
+        {
+          "$ref": "#/$defs/code_content"
+        },
+        {
+          "$ref": "#/$defs/scenario_content"
+        },
+        {
+          "$ref": "#/$defs/strategic_content"
+        },
+        {
+          "$ref": "#/$defs/error_content"
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "description": "来源追溯信息",
+      "properties": {
+        "paper_id": {
+          "type": "string",
+          "description": "论文标识",
+          "examples": ["ArXiv:24xx.xxxx", "CVPR 2024"]
+        },
+        "paper_location": {
+          "type": "string",
+          "description": "论文中的具体位置",
+          "pattern": "^(Page [0-9]+, Eq\\. [0-9]+|Section [0-9]+(\\.[0-9]+)?)$",
+          "examples": ["Page 6, Eq. 8", "Section 3.2"]
+        },
+        "code_link": {
+          "type": "string",
+          "description": "GitHub代码链接",
+          "format": "uri",
+          "pattern": "^https?://github\\.com/[^/]+/[^/]+/blob/[^#]+#L[0-9]+(-L[0-9]+)?$",
+          "examples": [
+            "https://github.com/user/repo/blob/main/models/diffusion.py#L142-L158"
+          ]
+        },
+        "atom_path": {
+          "type": "string",
+          "description": "原子存储路径",
+          "pattern": "^/(atoms|reports)/[a-z_]+/[A-Z_0-9]+\\.json$",
+          "examples": [
+            "/atoms/math_ops/MATH_PLAN_DIFF_01.json",
+            "/reports/2026-02/2026-02-02/05_critic.json"
+          ]
+        }
+      },
+      "required": ["paper_id", "paper_location", "code_link", "atom_path"],
+      "minProperties": 1
+    },
+    "delta_audit": {
+      "type": "object",
+      "description": "增量审计信息",
+      "properties": {
+        "existing_assets": {
+          "type": "array",
+          "description": "已存在的相似资产ID列表",
+          "items": {
+            "type": "string",
+            "pattern": "^(MATH|CODE|SCENARIO|DECISION)_[A-Za-z0-9_]+_[0-9]{2}$"
+          },
+          "default": []
+        },
+        "incremental_value": {
+          "type": "string",
+          "description": "增量价值描述",
+          "maxLength": 200
+        },
+        "contradiction_marked": {
+          "type": "boolean",
+          "description": "是否检测到与已有资产的冲突",
+          "default": false
+        }
+      },
+      "required": ["existing_assets", "incremental_value", "contradiction_marked"]
+    }
+  },
+  "required": [
+    "asset_id",
+    "category",
+    "data_status",
+    "metadata",
+    "content",
+    "provenance",
+    "delta_audit"
+  ],
+  "$defs": {
+    "math_content": {
+      "title": "数学原子内容",
+      "type": "object",
+      "properties": {
+        "mathematical_expression": {
+          "type": "string",
+          "description": "数学表达式，支持LaTeX格式"
+        },
+        "physical_intuition": {
+          "type": "string",
+          "description": "物理直觉描述",
+          "maxLength": 300
+        },
+        "traditional_mapping": {
+          "type": "string",
+          "description": "与传统方法的映射关系"
+        },
+        "avp_relevance": {
+          "type": "string",
+          "description": "AVP场景相关性"
+        },
+        "assumptions": {
+          "type": "array",
+          "description": "数学假设列表",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "boundary_conditions": {
+          "type": "string",
+          "description": "边界条件描述"
+        }
+      },
+      "required": [
+        "mathematical_expression",
+        "physical_intuition",
+        "traditional_mapping",
+        "avp_relevance"
+      ]
+    },
+    "code_content": {
+      "title": "代码原子内容",
+      "type": "object",
+      "properties": {
+        "technical_category": {
+          "type": "string",
+          "description": "技术类别",
+          "examples": ["Trajectory_Sampling", "Feature_Fusion", "Optimization"]
+        },
+        "source_code": {
+          "type": "string",
+          "description": "源代码片段"
+        },
+        "code_location": {
+          "type": "string",
+          "description": "代码位置描述",
+          "examples": ["models/diffusion.py (L142-L185)"]
+        },
+        "logic_description": {
+          "type": "string",
+          "description": "逻辑描述"
+        },
+        "performance_note": {
+          "type": "object",
+          "properties": {
+            "complexity": {
+              "type": "string",
+              "description": "时间复杂度分析"
+            },
+            "deployment_suggestion": {
+              "type": "string",
+              "description": "部署优化建议"
+            },
+            "memory_footprint": {
+              "type": "string",
+              "description": "内存占用分析"
+            },
+            "bottleneck_analysis": {
+              "type": "string",
+              "description": "性能瓶颈分析"
+            }
+          },
+          "required": ["complexity", "deployment_suggestion"]
+        }
+      },
+      "required": [
+        "technical_category",
+        "source_code",
+        "code_location",
+        "logic_description",
+        "performance_note"
+      ]
+    },
+    "scenario_content": {
+      "title": "场景原子内容",
+      "type": "object",
+      "properties": {
+        "technical_association": {
+          "type": "string",
+          "description": "技术关联描述"
+        },
+        "challenge_scenario": {
+          "type": "string",
+          "description": "挑战场景描述"
+        },
+        "failure_mechanism": {
+          "type": "string",
+          "description": "失效机理分析"
+        },
+        "risk_assessment": {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "type": "string",
+              "description": "严重程度",
+              "enum": ["S1", "S2", "S3", "S4"]
+            },
+            "exposure_probability": {
+              "type": "string",
+              "description": "暴露概率",
+              "enum": ["Low", "Medium", "High"]
+            },
+            "controllability": {
+              "type": "string",
+              "description": "可控性",
+              "enum": ["Low", "Medium", "High"]
+            }
+          },
+          "required": ["severity", "exposure_probability", "controllability"]
+        },
+        "audit_note": {
+          "type": "string",
+          "description": "审计备注"
+        },
+        "reinforcement_suggestion": {
+          "type": "string",
+          "description": "加固建议"
+        }
+      },
+      "required": [
+        "technical_association",
+        "challenge_scenario",
+        "failure_mechanism",
+        "risk_assessment",
+        "audit_note",
+        "reinforcement_suggestion"
+      ]
+    },
+    "strategic_content": {
+      "title": "战略决策内容",
+      "type": "object",
+      "properties": {
+        "strategic_tone": {
+          "type": "string",
+          "description": "战略基调",
+          "enum": ["Go", "Watch", "Skip"]
+        },
+        "core_reasoning": {
+          "type": "array",
+          "description": "核心推理链条",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "compound_suggestion": {
+          "type": "string",
+          "description": "复合建议"
+        },
+        "roi_analysis": {
+          "type": "object",
+          "properties": {
+            "computational_cost": {
+              "type": "string",
+              "description": "计算成本评估",
+              "enum": ["Low", "Medium", "High"]
+            },
+            "safety_improvement": {
+              "type": "string",
+              "description": "安全改进评估",
+              "enum": ["Low", "Medium", "High"]
+            },
+            "data_dependency": {
+              "type": "string",
+              "description": "数据依赖评估",
+              "enum": ["Low", "Medium", "High"]
+            },
+            "overall_roi": {
+              "type": "string",
+              "description": "整体ROI评估",
+              "enum": ["Low", "Medium", "High"]
+            }
+          },
+          "required": [
+            "computational_cost",
+            "safety_improvement",
+            "data_dependency",
+            "overall_roi"
+          ]
+        }
+      },
+      "required": [
+        "strategic_tone",
+        "core_reasoning",
+        "compound_suggestion",
+        "roi_analysis"
+      ]
+    },
+    "error_content": {
+      "title": "错误原子内容",
+      "type": "object",
+      "properties": {
+        "error_type": {
+          "type": "string",
+          "description": "错误类型"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "错误消息"
+        },
+        "recovery_action": {
+          "type": "string",
+          "description": "恢复操作建议"
+        },
+        "partial_data": {
+          "type": "string",
+          "description": "部分数据（如有）"
+        }
+      },
+      "required": ["error_type", "error_message", "recovery_action"]
+    }
+  }
+}

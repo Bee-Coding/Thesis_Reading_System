@@ -1,0 +1,33 @@
+{
+  "asset_id": "METHOD_FLOW_MATCHING_INFERENCE_01",
+  "category": "Method",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-03T16:13:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#Flow_Matching", "#Inference", "#Efficiency", "#GoalFlow"]
+  },
+  "content": {
+    "technique_name": "基于流匹配的少步/单步推理",
+    "technical_description": "在推理（去噪）过程中，流匹配模型采用直接、笔直的路径将噪声分布转移到目标分布。实验表明，即使将推理步骤从20步减少到仅1步，模型性能依然保持稳定且优秀。",
+    "mathematical_intuition": "流匹配优化的是从噪声到数据分布的概率流常微分方程（PF-ODE）的向量场，其学习到的轨迹在概率空间中本身就是近似直线的。因此，在推理时不需要像扩散模型那样进行多步、曲折的迭代去噪，可以大步长甚至单步完成。",
+    "avp_relevance": "在车载计算平台资源受限的AVP场景下，单步或极少步的推理能极大降低轨迹生成的延迟（Latency），实现更快的反应速度，这对于处理地库中的动态行人或车辆至关重要。",
+    "assumptions": ["学习到的概率流向量场足够准确和光滑"],
+    "boundary_conditions": "在极端复杂、训练数据未充分覆盖的Corner Case下，少步推理的稳定性可能需要进一步验证。",
+    "key_equations": {
+      "flow_matching_objective": "L_FM = E_{t,x_0,x_1}[||v_θ(x_t, t) - (x_1 - x_0)||^2]",
+      "inference_path": "x_t = (1-t)x_0 + t*x_1, t ∈ [0,1]"
+    }
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 3.1 Preliminary, Section 5 Conclusion",
+    "atom_path": "/atoms/methods/METHOD_FLOW_MATCHING_INFERENCE_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["METHOD_DIFFUSION_DENOISE_01"],
+    "incremental_value": "这是本文相对于主流扩散模型（如DDPM）的一个核心增量优势。传统扩散模型需要10-100步迭代去噪，而Flow Matching通过改变训练目标，实现了理论上和实验上的高效推理。",
+    "contradiction_marked": false
+  }
+}

@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thesis-reading-system.example/schemas/agent_response.schema.json",
+  "title": "Agent调用响应",
+  "description": "定义Agent执行后的标准化响应格式",
+  "type": "object",
+  "properties": {
+    "invocation_id": {
+      "type": "string",
+      "description": "与请求对应的调用ID",
+      "pattern": "^INV_[0-9]{8}_[0-9]{6}_(SCHOLAR|CODE|VALIDATOR|VAULT|CRITIC)_[0-9]{3}$"
+    },
+    "status": {
+      "type": "string",
+      "description": "执行状态",
+      "enum": ["success", "partial", "failed", "timeout"]
+    },
+    "agent": {
+      "type": "string",
+      "description": "执行的Agent名称",
+      "enum": [
+        "Scholar_Internalizer",
+        "Code_Architect",
+        "Scenario_Validator",
+        "Knowledge_Vault",
+        "Strategic_Critic"
+      ]
+    },
+    "task_id": {
+      "type": "string",
+      "description": "关联的任务ID",
+      "pattern": "^TASK_(SCHOLAR|CODE|VALIDATOR|VAULT|CRITIC)_[A-Za-z0-9_]+_[0-9]{2}$"
+    },
+    "execution_time_ms": {
+      "type": "integer",
+      "description": "实际执行时间（毫秒）",
+      "minimum": 0,
+      "maximum": 86400000
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    },
+    "quality_check": {
+      "$ref": "#/$defs/quality_check"
+    },
+    "errors": {
+      "type": "array",
+      "description": "错误信息数组",
+      "items": {
+        "$ref": "#/$defs/error_info"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "invocation_id",
+    "status",
+    "agent",
+    "task_id",
+    "execution_time_ms",
+    "output",
+    "quality_check",
+    "errors"
+  ],
+  "$defs": {
+    "output": {
+      "title": "产出内容",
+      "type": "object",
+      "properties": {
+        "atoms": {
+          "type": "array",
+          "description": "标准原子数组",
+          "items": {
+            "$ref": "atom_base.schema.json"
+          },
+          "default": []
+        },
+        "summary": {
+          "type": "string",
+          "description": "执行摘要，人类可读的简短描述"
+        }
+      },
+      "required": ["atoms", "summary"]
+    },
+    "quality_check": {
+      "title": "质量检查结果",
+      "type": "object",
+      "properties": {
+        "atoms_generated": {
+          "type": "integer",
+          "description": "生成的原子数量",
+          "minimum": 0
+        },
+        "avg_quality_score": {
+          "type": "number",
+          "description": "平均质量分数",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "grades": {
+          "type": "object",
+          "description": "质量等级分布",
+          "properties": {
+            "A": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "B": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "C": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "D": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": ["A", "B", "C", "D"]
+        },
+        "issues": {
+          "type": "array",
+          "description": "质量问题列表",
+          "items": {
+            "$ref": "#/$defs/quality_issue"
+          },
+          "default": []
+        }
+      },
+      "required": ["atoms_generated", "avg_quality_score", "grades", "issues"]
+    },
+    "quality_issue": {
+      "title": "质量问题",
+      "type": "object",
+      "properties": {
+        "atom_id": {
+          "type": "string",
+          "description": "相关原子ID"
+        },
+        "issue_type": {
+          "type": "string",
+          "description": "问题类型",
+          "enum": [
+            "missing_field",
+            "invalid_format",
+            "low_confidence",
+            "contradiction_detected",
+            "source_unverified"
+          ]
+        },
+        "field": {
+          "type": "string",
+          "description": "相关字段路径"
+        },
+        "severity": {
+          "type": "string",
+          "description": "严重程度",
+          "enum": ["critical", "warning", "info"]
+        },
+        "message": {
+          "type": "string",
+          "description": "问题描述"
+        }
+      },
+      "required": ["atom_id", "issue_type", "field", "severity", "message"]
+    },
+    "error_info": {
+      "title": "错误信息",
+      "type": "object",
+      "properties": {
+        "error_code": {
+          "type": "string",
+          "description": "错误码",
+          "pattern": "^E[0-9]{3}$"
+        },
+        "error_type": {
+          "type": "string",
+          "description": "错误类型",
+          "enum": [
+            "source_not_found",
+            "parse_error",
+            "validation_error",
+            "timeout",
+            "quality_below_threshold",
+            "dependency_failed",
+            "hallucination_detected",
+            "system_error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "错误消息"
+        },
+        "recoverable": {
+          "type": "boolean",
+          "description": "是否可恢复"
+        },
+        "suggested_action": {
+          "type": "string",
+          "description": "建议操作"
+        }
+      },
+      "required": ["error_code", "error_type", "message", "recoverable", "suggested_action"]
+    }
+  }
+}

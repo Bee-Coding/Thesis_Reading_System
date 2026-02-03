@@ -1,0 +1,45 @@
+{
+  "asset_id": "CONCEPT_GOALFLOW_FRAMEWORK_01",
+  "category": "Concept",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-03T16:13:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#Multimodal_Trajectory", "#Flow_Matching", "#End-to-End", "#GoalFlow"]
+  },
+  "content": {
+    "core_concept": "Goal-Driven Flow Matching 框架",
+    "definition": "一种用于端到端自动驾驶中生成高质量多模态轨迹的框架。其核心是先生成精确的目标点（goal points），然后利用这些目标点有效约束基于流匹配（Flow Matching）的生成模型，最终输出多模态轨迹。",
+    "avp_relevance": "在地库AVP场景中，该框架能生成前往多个潜在车位（多模态）的平滑、合理的轨迹，并且通过首先生成目标点（车位中心或停靠点），为轨迹生成提供了明确的几何和语义引导。",
+    "key_principle": "目标驱动与流匹配结合。目标点为高维轨迹生成问题提供了一个低维、易于优化的锚点，从而约束并提升了生成轨迹的质量和精确度。",
+    "distinguishing_feature": "区别于直接生成完整轨迹的模型，本框架采用了先生成目标，再生成轨迹的两阶段生成范式。",
+    "core_innovations": [
+      {
+        "innovation_id": "INNOV_01",
+        "name": "Goal Point Establishment",
+        "description": "设计了一种新颖的goal point建立方法，用于引导生成模型进行轨迹生成"
+      },
+      {
+        "innovation_id": "INNOV_02",
+        "name": "Flow Matching Integration",
+        "description": "首次将Flow Matching引入端到端自动驾驶，并与goal point引导无缝集成"
+      },
+      {
+        "innovation_id": "INNOV_03",
+        "name": "Shadow Trajectory Selection",
+        "description": "开发了创新的轨迹选择机制，使用shadow trajectories进一步解决潜在的goal point误差"
+      }
+    ]
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 1 Introduction, Section 5 Conclusion",
+    "atom_path": "/atoms/concepts/CONCEPT_GOALFLOW_FRAMEWORK_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["VAD", "UniAD", "Diffusion-ES", "MotionDiffuser", "GoalGAN"],
+    "incremental_value": "相比于VAD的基于采样的概率规划，本框架引入了明确的目标生成阶段和更高效的流匹配生成器。相比于标准的扩散策略，流匹配在推理效率上具有显著优势。",
+    "contradiction_marked": false
+  }
+}

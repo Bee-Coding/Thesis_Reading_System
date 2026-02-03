@@ -1,0 +1,875 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thesis-reading-system.example/schemas/task_package.schema.json",
+  "title": "任务包结构",
+  "description": "定义Orchestrator输出的标准化任务包格式",
+  "type": "object",
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "description": "计划唯一标识符",
+      "pattern": "^AVP_E2E_[0-9]{8}_[0-9]{3}_(DI|QA|ER|VF)$",
+      "examples": [
+        "AVP_E2E_20260203_001_DI",
+        "AVP_E2E_20260203_002_QA"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601格式创建时间戳"
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "context": {
+      "$ref": "#/$defs/context"
+    },
+    "task_graph": {
+      "$ref": "#/$defs/task_graph"
+    },
+    "quality_gates": {
+      "$ref": "#/$defs/quality_gates"
+    },
+    "error_handling": {
+      "$ref": "#/$defs/error_handling"
+    },
+    "expected_outputs": {
+      "$ref": "#/$defs/expected_outputs"
+    }
+  },
+  "required": [
+    "plan_id",
+    "created_at",
+    "meta",
+    "context",
+    "task_graph",
+    "quality_gates",
+    "error_handling",
+    "expected_outputs"
+  ],
+  "$defs": {
+    "meta": {
+      "title": "元数据",
+      "type": "object",
+      "properties": {
+        "focus": {
+          "type": "string",
+          "description": "技术聚焦点，人类可读描述"
+        },
+        "mode": {
+          "type": "string",
+          "description": "执行模式",
+          "enum": ["Deep_Internalization", "Quick_Assessment", "Engineering_Reproduction", "Validation_Focused"]
+        },
+        "paper_source": {
+          "type": "string",
+          "description": "论文来源标识"
+        },
+        "code_source": {
+          "type": "string",
+          "description": "代码来源标识"
+        },
+        "priority": {
+          "type": "integer",
+          "description": "优先级，1-5，1最高",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "deadline": {
+          "type": "string",
+          "format": "date-time",
+          "description": "可选，ISO8601截止时间"
+        },
+        "tags": {
+          "type": "array",
+          "description": "标签数组",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": ["focus", "mode", "paper_source", "code_source", "priority"]
+    },
+    "context": {
+      "title": "执行上下文",
+      "type": "object",
+      "properties": {
+        "atlas_snapshot": {
+          "$ref": "#/$defs/atlas_snapshot"
+        },
+        "pre_check_result": {
+          "$ref": "#/$defs/pre_check_result"
+        }
+      },
+      "required": ["atlas_snapshot", "pre_check_result"]
+    },
+    "atlas_snapshot": {
+      "title": "知识库快照",
+      "type": "object",
+      "properties": {
+        "total_atoms": {
+          "type": "integer",
+          "description": "知识库总原子数",
+          "minimum": 0
+        },
+        "domain_coverage": {
+          "type": "array",
+          "description": "领域覆盖列表",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "recent_contributions": {
+          "type": "array",
+          "description": "近期贡献原子ID列表",
+          "items": {
+            "type": "string",
+            "pattern": "^(MATH|CODE|SCENARIO|DECISION)_[A-Za-z0-9_]+_[0-9]{2}$"
+          },
+          "default": []
+        },
+        "quality_distribution": {
+          "type": "object",
+          "description": "质量分布",
+          "properties": {
+            "A": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "B": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "C": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "D": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": ["A", "B", "C", "D"]
+        }
+      },
+      "required": ["total_atoms", "domain_coverage", "recent_contributions", "quality_distribution"]
+    },
+    "pre_check_result": {
+      "title": "预检查结果",
+      "type": "object",
+      "properties": {
+        "paper_accessible": {
+          "type": "boolean",
+          "description": "论文是否可访问"
+        },
+        "code_repo_cloned": {
+          "type": "boolean",
+          "description": "代码仓库是否已克隆"
+        },
+        "domain_overlap": {
+          "type": "number",
+          "description": "与现有知识库领域重叠度",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "risk_assessment": {
+          "type": "string",
+          "description": "风险评估等级",
+          "enum": ["low", "medium", "high"]
+        },
+        "estimated_complexity": {
+          "type": "integer",
+          "description": "预估复杂度分数",
+          "minimum": 1,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "paper_accessible",
+        "code_repo_cloned",
+        "domain_overlap",
+        "risk_assessment",
+        "estimated_complexity"
+      ]
+    },
+    "task_graph": {
+      "title": "任务图",
+      "type": "object",
+      "properties": {
+        "stages": {
+          "type": "array",
+          "description": "任务阶段数组",
+          "items": {
+            "$ref": "#/$defs/stage"
+          },
+          "minItems": 1
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "任务依赖关系",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          },
+          "default": []
+        }
+      },
+      "required": ["stages"]
+    },
+    "stage": {
+      "title": "任务阶段",
+      "type": "object",
+      "properties": {
+        "stage_id": {
+          "type": "string",
+          "description": "阶段唯一标识",
+          "pattern": "^S[0-9]+$",
+          "examples": ["S1", "S2", "S3"]
+        },
+        "stage_name": {
+          "type": "string",
+          "description": "阶段名称",
+          "enum": [
+            "parallel_analysis",
+            "integration_validation",
+            "strategic_assessment",
+            "knowledge_integration"
+          ]
+        },
+        "execution_mode": {
+          "type": "string",
+          "description": "执行模式",
+          "enum": ["parallel", "sequential"]
+        },
+        "depends_on": {
+          "type": "array",
+          "description": "依赖的阶段ID列表",
+          "items": {
+            "type": "string",
+            "pattern": "^S[0-9]+$"
+          },
+          "default": []
+        },
+        "tasks": {
+          "type": "array",
+          "description": "任务数组",
+          "items": {
+            "$ref": "#/$defs/task"
+          },
+          "minItems": 1
+        }
+      },
+      "required": ["stage_id", "stage_name", "execution_mode", "tasks"]
+    },
+    "task": {
+      "title": "任务定义",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "任务唯一标识",
+          "pattern": "^TASK_(SCHOLAR|CODE|VALIDATOR|VAULT|CRITIC)_[A-Za-z0-9_]+_[0-9]{2}$",
+          "examples": [
+            "TASK_SCHOLAR_DIFF_01",
+            "TASK_CODE_DIFF_01",
+            "TASK_VAULT_CHECK_01"
+          ]
+        },
+        "agent": {
+          "type": "string",
+          "description": "负责的Agent",
+          "enum": [
+            "Scholar_Internalizer",
+            "Code_Architect",
+            "Scenario_Validator",
+            "Knowledge_Vault",
+            "Strategic_Critic"
+          ]
+        },
+        "input_spec": {
+          "$ref": "#/$defs/input_spec"
+        },
+        "output_spec": {
+          "$ref": "#/$defs/output_spec"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "description": "超时时间（秒）",
+          "minimum": 60,
+          "maximum": 3600
+        },
+        "priority": {
+          "type": "integer",
+          "description": "优先级，1-5，1最高",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "retry_config": {
+          "$ref": "#/$defs/retry_config"
+        }
+      },
+      "required": [
+        "task_id",
+        "agent",
+        "input_spec",
+        "output_spec",
+        "timeout_seconds",
+        "priority"
+      ]
+    },
+    "input_spec": {
+      "title": "输入规范",
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "description": "数据源列表",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/paper_source"
+              },
+              {
+                "$ref": "#/$defs/code_source"
+              }
+            ]
+          },
+          "minItems": 1
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "依赖任务列表",
+          "items": {
+            "$ref": "#/$defs/task_dependency"
+          },
+          "default": []
+        }
+      },
+      "required": ["sources"]
+    },
+    "paper_source": {
+      "title": "论文源",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "paper"
+        },
+        "paper_id": {
+          "type": "string",
+          "description": "论文标识"
+        },
+        "focus_sections": {
+          "type": "array",
+          "description": "重点分析章节列表",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": ["type", "paper_id"]
+    },
+    "code_source": {
+      "title": "代码源",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "code"
+        },
+        "repo_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "GitHub仓库URL"
+        },
+        "focus_files": {
+          "type": "array",
+          "description": "重点分析文件列表",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": ["type", "repo_url"]
+    },
+    "task_dependency": {
+      "title": "任务依赖",
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "依赖任务ID"
+        },
+        "output_ref": {
+          "type": "string",
+          "description": "引用的输出字段路径"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "是否为必需依赖",
+          "default": true
+        }
+      },
+      "required": ["task_id", "output_ref"]
+    },
+    "output_spec": {
+      "title": "输出规范",
+      "type": "object",
+      "properties": {
+        "atom_type": {
+          "type": "string",
+          "description": "期望的原子类型",
+          "enum": ["Math_Atom", "Code_Atom", "Scenario_Atom", "Strategic_Decision", "Asset_Index"]
+        },
+        "required_fields": {
+          "type": "array",
+          "description": "必需字段列表",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "quality_threshold": {
+          "type": "string",
+          "description": "最低质量等级",
+          "enum": ["A", "B", "C", "D"]
+        },
+        "expected_count": {
+          "type": "string",
+          "description": "期望产出数量范围",
+          "pattern": "^[0-9]+-[0-9]+$",
+          "examples": ["3-5", "2-4"]
+        }
+      },
+      "required": ["atom_type", "quality_threshold", "expected_count"]
+    },
+    "retry_config": {
+      "title": "重试配置",
+      "type": "object",
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "description": "最大重试次数",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 3
+        },
+        "backoff_factor": {
+          "type": "number",
+          "description": "退避因子",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2
+        }
+      },
+      "required": ["max_attempts", "backoff_factor"]
+    },
+    "dependency": {
+      "title": "依赖关系",
+      "type": "object",
+      "properties": {
+        "from_task": {
+          "type": "string",
+          "description": "源任务ID"
+        },
+        "to_task": {
+          "type": "string",
+          "description": "目标任务ID"
+        },
+        "data_flow": {
+          "type": "object",
+          "properties": {
+            "ref_type": {
+              "type": "string",
+              "const": "task_output"
+            },
+            "path": {
+              "type": "string",
+              "description": "JSONPath表达式"
+            },
+            "transform": {
+              "type": "string",
+              "description": "转换方式",
+              "enum": ["none", "summary", "keys_only"],
+              "default": "none"
+            }
+          },
+          "required": ["ref_type", "path"]
+        },
+        "condition": {
+          "type": "string",
+          "description": "依赖条件",
+          "enum": ["success", "partial"],
+          "default": "success"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "依赖解析超时时间",
+          "pattern": "^PT[0-9]+[MH]$",
+          "examples": ["PT5M", "PT10M"]
+        }
+      },
+      "required": ["from_task", "to_task", "data_flow", "condition"]
+    },
+    "quality_gates": {
+      "title": "质量门控配置",
+      "type": "object",
+      "properties": {
+        "pre_execution": {
+          "type": "array",
+          "description": "预执行质量门",
+          "items": {
+            "$ref": "#/$defs/quality_gate"
+          },
+          "default": []
+        },
+        "post_execution": {
+          "type": "array",
+          "description": "后执行质量门",
+          "items": {
+            "$ref": "#/$defs/quality_gate"
+          },
+          "default": []
+        },
+        "final_integration": {
+          "type": "array",
+          "description": "最终集成质量门",
+          "items": {
+            "$ref": "#/$defs/quality_gate"
+          },
+          "default": []
+        }
+      },
+      "required": ["pre_execution", "post_execution", "final_integration"]
+    },
+    "quality_gate": {
+      "title": "质量门定义",
+      "type": "object",
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "description": "质量门唯一标识",
+          "pattern": "^QG_(PRE|POST|INTEG)_[A-Za-z0-9_]+_[0-9]{2}$",
+          "examples": [
+            "QG_PRE_SCHOLAR_01",
+            "QG_POST_SCHOLAR_01",
+            "QG_INTEG_DIFF_01"
+          ]
+        },
+        "gate_type": {
+          "type": "string",
+          "description": "质量门类型",
+          "enum": ["pre_execution", "post_execution", "integration"]
+        },
+        "task_id": {
+          "type": "string",
+          "description": "关联的任务ID"
+        },
+        "stage_id": {
+          "type": "string",
+          "description": "关联的阶段ID"
+        },
+        "checks": {
+          "type": "array",
+          "description": "检查项数组",
+          "items": {
+            "$ref": "#/$defs/quality_check"
+          },
+          "minItems": 1
+        },
+        "failure_action": {
+          "type": "string",
+          "description": "失败处理动作",
+          "enum": ["block", "retry", "degrade", "skip", "abort"]
+        },
+        "action_config": {
+          "type": "object",
+          "description": "动作配置",
+          "properties": {
+            "retry_count": {
+              "type": "integer",
+              "description": "重试次数",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "degrade_threshold": {
+              "type": "string",
+              "description": "降级后的质量阈值",
+              "enum": ["A", "B", "C", "D"]
+            },
+            "notification_channel": {
+              "type": "string",
+              "description": "通知渠道",
+              "enum": ["slack", "email", "none"]
+            }
+          }
+        }
+      },
+      "required": ["gate_id", "gate_type", "checks", "failure_action"]
+    },
+    "quality_check": {
+      "title": "质量检查项",
+      "type": "object",
+      "properties": {
+        "check_id": {
+          "type": "string",
+          "description": "检查项唯一标识",
+          "pattern": "^CHECK_[A-Za-z0-9_]+_[0-9]{2}$"
+        },
+        "check_type": {
+          "type": "string",
+          "description": "检查类型",
+          "enum": [
+            "source_accessibility",
+            "dependency_resolved",
+            "output_quality",
+            "atom_count",
+            "required_fields",
+            "consistency_check",
+            "contradiction_check"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "检查目标"
+        },
+        "condition": {
+          "type": "string",
+          "description": "布尔条件表达式"
+        },
+        "error_code": {
+          "type": "string",
+          "description": "错误码",
+          "pattern": "^E[0-9]{3}$"
+        },
+        "severity": {
+          "type": "string",
+          "description": "严重程度",
+          "enum": ["critical", "warning", "info"]
+        }
+      },
+      "required": ["check_id", "check_type", "target", "condition", "error_code", "severity"]
+    },
+    "error_handling": {
+      "title": "错误处理配置",
+      "type": "object",
+      "properties": {
+        "retry_policy": {
+          "$ref": "#/$defs/retry_policy"
+        },
+        "fallback_strategies": {
+          "$ref": "#/$defs/fallback_strategies"
+        },
+        "escalation_rules": {
+          "type": "array",
+          "description": "升级规则数组",
+          "items": {
+            "$ref": "#/$defs/escalation_rule"
+          },
+          "default": []
+        }
+      },
+      "required": ["retry_policy", "fallback_strategies", "escalation_rules"]
+    },
+    "retry_policy": {
+      "title": "重试策略",
+      "type": "object",
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "description": "最大尝试次数",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "backoff_strategy": {
+          "type": "string",
+          "description": "退避策略",
+          "enum": ["fixed", "linear", "exponential", "random"]
+        },
+        "base_delay_seconds": {
+          "type": "integer",
+          "description": "基础延迟秒数",
+          "minimum": 1,
+          "maximum": 300
+        }
+      },
+      "required": ["max_attempts", "backoff_strategy", "base_delay_seconds"]
+    },
+    "fallback_strategies": {
+      "title": "降级策略",
+      "type": "object",
+      "properties": {
+        "on_quality_failure": {
+          "$ref": "#/$defs/fallback_strategy"
+        },
+        "on_source_unavailable": {
+          "$ref": "#/$defs/fallback_strategy"
+        },
+        "on_agent_failure": {
+          "$ref": "#/$defs/fallback_strategy"
+        }
+      },
+      "required": ["on_quality_failure", "on_source_unavailable", "on_agent_failure"]
+    },
+    "fallback_strategy": {
+      "title": "降级策略定义",
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "降级动作",
+          "enum": ["degrade_threshold", "use_cached", "alternative_agent"]
+        },
+        "new_threshold": {
+          "type": "string",
+          "description": "新的质量阈值",
+          "enum": ["A", "B", "C", "D"]
+        },
+        "notify": {
+          "type": "string",
+          "description": "通知对象",
+          "enum": ["orchestrator", "user", "none"]
+        }
+      },
+      "required": ["action"]
+    },
+    "escalation_rule": {
+      "title": "升级规则",
+      "type": "object",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "触发条件"
+        },
+        "action": {
+          "type": "string",
+          "description": "升级动作",
+          "enum": ["notify_human", "rollback", "abort_plan"]
+        },
+        "level": {
+          "type": "string",
+          "description": "紧急程度",
+          "enum": ["info", "warning", "urgent", "critical"]
+        },
+        "channel": {
+          "type": "string",
+          "description": "通知渠道",
+          "enum": ["slack", "email", "sms", "none"]
+        }
+      },
+      "required": ["condition", "action", "level"]
+    },
+    "expected_outputs": {
+      "title": "期望产出",
+      "type": "object",
+      "properties": {
+        "atoms": {
+          "type": "array",
+          "description": "原子产出期望",
+          "items": {
+            "$ref": "#/$defs/expected_atom_output"
+          },
+          "default": []
+        },
+        "assessments": {
+          "type": "array",
+          "description": "评估产出期望",
+          "items": {
+            "$ref": "#/$defs/expected_assessment_output"
+          },
+          "default": []
+        },
+        "decisions": {
+          "type": "array",
+          "description": "决策产出期望",
+          "items": {
+            "$ref": "#/$defs/expected_decision_output"
+          },
+          "default": []
+        }
+      },
+      "required": ["atoms", "assessments", "decisions"]
+    },
+    "expected_atom_output": {
+      "title": "期望原子产出",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "原子类型",
+          "enum": ["Math_Atom", "Code_Atom", "Scenario_Atom"]
+        },
+        "count": {
+          "type": "string",
+          "description": "期望数量范围",
+          "pattern": "^[0-9]+-[0-9]+$"
+        },
+        "coverage": {
+          "type": "array",
+          "description": "覆盖范围",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "quality_target": {
+          "type": "string",
+          "description": "质量目标",
+          "enum": ["A", "B+", "B", "C+", "C"]
+        }
+      },
+      "required": ["type", "count", "quality_target"]
+    },
+    "expected_assessment_output": {
+      "title": "期望评估产出",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "评估类型",
+          "enum": ["feasibility_assessment", "performance_assessment", "risk_assessment"]
+        },
+        "scope": {
+          "type": "string",
+          "description": "评估范围"
+        },
+        "required_fields": {
+          "type": "array",
+          "description": "必需字段",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "required": ["type", "scope", "required_fields"]
+    },
+    "expected_decision_output": {
+      "title": "期望决策产出",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "决策类型",
+          "enum": ["adoption_recommendation", "technical_direction", "resource_allocation"]
+        },
+        "format": {
+          "type": "string",
+          "description": "格式",
+          "enum": ["structured_decision", "executive_summary", "detailed_report"]
+        },
+        "confidence_threshold": {
+          "type": "number",
+          "description": "置信度阈值",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["type", "format", "confidence_threshold"]
+    }
+  }
+}

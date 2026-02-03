@@ -1,0 +1,32 @@
+{
+  "papers": [
+    {
+      "paper_id": "GoalFlow_2024",
+      "title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+      "authors": ["Zebin Xing", "Xingyu Zhang", "Yang Hu", "Bo Jiang", "Tong He", "Qian Zhang", "Xiaoxiao Long", "Wei Yin"],
+      "source": "arXiv",
+      "year": 2024,
+      "domain": ["end-to-end autonomous driving", "trajectory generation", "flow matching"],
+      "analysis_date": "2026-02-03",
+      "analysis_mode": "Deep_Internalization",
+      "atoms_generated": [
+        "/atoms/concepts/CONCEPT_GOALFLOW_FRAMEWORK_01.json",
+        "/atoms/methods/METHOD_FLOW_MATCHING_INFERENCE_01.json",
+        "/atoms/findings/FINDING_FLOWMATCHING_EFFICIENCY_01.json"
+      ],
+      "key_contributions": [
+        "Goal Point Establishment - 新颖的目标点建立方法用于引导轨迹生成",
+        "Flow Matching Integration - 首次将Flow Matching引入端到端自动驾驶",
+        "Shadow Trajectory Selection - 创新的轨迹选择机制处理目标点误差"
+      ],
+      "benchmark_results": {
+        "dataset": "Navsim",
+        "metric": "PDMS",
+        "score": 90.3,
+        "ranking": "State-of-the-art"
+      }
+    }
+  ],
+  "last_updated": "2026-02-03T16:15:00Z",
+  "total_papers": 1
+}
