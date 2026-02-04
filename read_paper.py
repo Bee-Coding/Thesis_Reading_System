@@ -97,7 +97,7 @@ class ThesisReader:
         print("正在调用LLM生成计划...")
         response = await self.llm_client.complete(
             messages=messages,
-            max_tokens=4000,
+            max_tokens=8000,  # 增加到8000以避免计划被截断
             temperature=0.3
         )
         
@@ -211,6 +211,117 @@ class ThesisReader:
         
         return results
     
+    async def build_knowledge_network(self) -> dict:
+        """构建知识网络"""
+        print(f"\n{'='*60}")
+        print(f"构建知识网络 (Knowledge_Weaver)")
+        print(f"{'='*60}")
+        
+        # 读取现有的 algorithm_atlas.md
+        atlas_path = settings.base_dir / "manifests" / "algorithm_atlas.md"
+        atlas_content = ""
+        if atlas_path.exists():
+            atlas_content = atlas_path.read_text(encoding='utf-8')
+            print(f"  已加载现有技术图谱")
+        
+        # 读取 paper_index.json
+        index_path = settings.base_dir / "manifests" / "paper_index.json"
+        index_data = {}
+        if index_path.exists():
+            index_data = json.loads(index_path.read_text(encoding='utf-8'))
+            print(f"  已加载论文索引 (共{index_data.get('total_papers', 0)}篇)")
+        
+        # 读取 Knowledge_Weaver 的 System Prompt
+        weaver_prompt_path = settings.agents_dir / "Knowledge_Weaver.md"
+        if weaver_prompt_path.exists():
+            system_prompt = weaver_prompt_path.read_text(encoding='utf-8')
+        else:
+            system_prompt = self._get_default_weaver_prompt()
+        
+        # 构建输入
+        user_prompt = f"""请分析以下新生成的原子与已有知识库的关系，并更新技术图谱。
+
+## 新论文信息
+论文标题: {self.paper_content.title}
+论文ID: GoalFlow_2024
+
+## 新生成的原子
+1. CONCEPT_GOALFLOW_FRAMEWORK_01 - Goal-Driven Flow Matching框架
+2. METHOD_FLOW_MATCHING_INFERENCE_01 - 基于流匹配的少步/单步推理
+3. FINDING_FLOWMATCHING_EFFICIENCY_01 - Flow Matching效率优势
+
+## 当前技术图谱摘要
+{atlas_content[:2000]}...
+
+## 任务
+请输出以下内容：
+
+### 1. 技术关系分析
+识别新原子与已有技术的关系（继承/演进/互补/对立），并给出关系强度（0.0-1.0）。
+
+### 2. 更新后的技术图谱片段
+提供需要添加到 algorithm_atlas.md 的新内容（Markdown格式）。
+
+### 3. 关系原子
+生成 Relation_Atom 的 JSON 格式（如果发现了重要关系）。
+
+### 4. 知识债务清单
+从论文和原子中提取的知识债务项。
+
+请按照 Knowledge_Weaver 的输出标准进行分析。
+"""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        print("正在调用LLM分析知识关系...")
+        response = await self.llm_client.complete(
+            messages=messages,
+            max_tokens=8000,
+            temperature=0.2
+        )
+        
+        print(f"  Provider: {response.provider}")
+        print(f"  Latency: {response.latency_ms}ms")
+        
+        # 保存分析结果
+        network_file = self.output_dir / f"knowledge_network_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+        network_file.write_text(response.content, encoding='utf-8')
+        print(f"  知识网络分析已保存: {network_file.name}")
+        
+        # 尝试更新 algorithm_atlas.md（追加新内容）
+        try:
+            # 简单追加策略：在文件末尾添加更新日志
+            update_log = f"\n\n### {datetime.now().strftime('%Y-%m-%d')}\n"
+            update_log += f"- **新增论文**: {self.paper_content.title}\n"
+            update_log += f"- **新增原子**: 3个 (Concept, Method, Finding)\n"
+            update_log += f"- **详细分析**: 参见 `{network_file.name}`\n"
+            
+            with open(atlas_path, 'a', encoding='utf-8') as f:
+                f.write(update_log)
+            
+            print(f"  ✓ algorithm_atlas.md 已更新")
+        except Exception as e:
+            print(f"  ⚠ 更新 algorithm_atlas.md 失败: {e}")
+        
+        return {
+            "content": response.content,
+            "file": str(network_file)
+        }
+    
+    def _get_default_weaver_prompt(self) -> str:
+        return """You are Knowledge_Weaver, responsible for analyzing relationships between new knowledge atoms and existing knowledge base.
+
+Your task is to:
+1. Identify technical relationships (inheritance, evolution, complement, conflict)
+2. Calculate relationship strength (0.0-1.0)
+3. Extract knowledge gaps and assumptions
+4. Update the technology atlas
+
+Output structured analysis in Markdown format."""
+    
     def _get_default_orchestrator_prompt(self) -> str:
         return """You are E2E-Learning-Orchestrator, responsible for creating comprehensive learning plans for academic papers.
 
@@ -262,6 +373,18 @@ async def main():
     print("\n" + "="*60)
     print("深度分析完成!")
     print(f"分析了 {len(results['analyses'])} 个章节")
+    print("="*60)
+    
+    # 4. 构建知识网络
+    print("\n" + "="*60)
+    print("开始构建知识网络...")
+    print("="*60)
+    
+    network_result = await reader.build_knowledge_network()
+    
+    print("\n" + "="*60)
+    print("知识网络构建完成!")
+    print(f"分析结果已保存")
     print("="*60)
 
 

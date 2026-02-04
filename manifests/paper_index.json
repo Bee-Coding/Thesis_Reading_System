@@ -24,9 +24,77 @@
         "metric": "PDMS",
         "score": 90.3,
         "ranking": "State-of-the-art"
-      }
+      },
+      "technical_relations": {
+        "inherits_from": ["Flow_Matching"],
+        "improves_upon": ["Diffusion_Models"],
+        "conflicts_with": [],
+        "complements": ["VAD", "BEVFormer"]
+      },
+      "knowledge_gaps": [
+        {
+          "gap_id": "GAP_GOALFLOW_01",
+          "description": "Flow Matching的理论收敛性证明",
+          "severity": "high",
+          "status": "open",
+          "impact": "理解单步推理的误差边界和适用条件"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_02",
+          "description": "Goal Point Vocabulary密度优化原理",
+          "severity": "high",
+          "status": "open",
+          "impact": "工程实现的参数选择（K=128 vs K=256）"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_03",
+          "description": "Sinusoidal Embedding的频率选择依据",
+          "severity": "medium",
+          "status": "open",
+          "impact": "时间编码的设计和性能"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_04",
+          "description": "Shadow Trajectory的选择策略",
+          "severity": "medium",
+          "status": "open",
+          "impact": "多候选轨迹的评分机制和最终选择"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_05",
+          "description": "速度场的时间依赖性：为什么训练目标是常数但网络需要t作为输入",
+          "severity": "high",
+          "status": "in_progress",
+          "impact": "理解Rectified Flow的核心机制和网络设计原理",
+          "discussion_date": "2026-02-04",
+          "key_insight": "网络学习近似常数速度场，t用于误差校正和处理复杂分布"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_06",
+          "description": "条件信息的作用机制：Goal Point和BEV如何影响速度场",
+          "severity": "high",
+          "status": "in_progress",
+          "impact": "理解条件生成的数学原理和工程实现",
+          "discussion_date": "2026-02-04",
+          "key_insight": "Goal Point是全局条件，直接影响速度方向；BEV提供约束"
+        },
+        {
+          "gap_id": "GAP_GOALFLOW_07",
+          "description": "学习目标的精确定义：p(轨迹|Goal,BEV) vs 条件速度场",
+          "severity": "medium",
+          "status": "in_progress",
+          "impact": "理解Flow Matching学习的是什么，避免过拟合理解",
+          "discussion_date": "2026-02-04",
+          "key_insight": "学习条件速度场，预测期望方向而非特定轨迹"
+        }
+      ],
+      "learning_notes": [
+        "/learning_notes/GoalFlow_Deep_Dive.md",
+        "/learning_notes/Training_vs_Inference.md",
+        "/learning_notes/Reverse_Driving_Implementation.md"
+      ]
     }
   ],
-  "last_updated": "2026-02-03T16:15:00Z",
+  "last_updated": "2026-02-04T10:00:00Z",
   "total_papers": 1
 }

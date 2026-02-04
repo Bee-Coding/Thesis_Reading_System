@@ -74,10 +74,19 @@ class DeepSeekClient(LLMClient):
         if self._client is None:
             try:
                 import openai
+                import httpx
+                
+                # 创建自定义 HTTP 客户端，禁用代理以避免 socks:// 协议错误
+                http_client = httpx.AsyncClient(
+                    timeout=self.timeout,
+                    proxy=None  # 显式禁用代理
+                )
+                
                 self._client = openai.AsyncOpenAI(
                     api_key=self.api_key,
                     base_url=self.api_base,
-                    timeout=self.timeout
+                    timeout=self.timeout,
+                    http_client=http_client
                 )
             except ImportError:
                 logger.error("openai package not installed")
