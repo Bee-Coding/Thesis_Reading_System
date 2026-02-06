@@ -1,0 +1,448 @@
+
+=== Page 3 ===
+Scorer Decoder
+MLP
+Perception Module
+Goal Point Construction Module
+Trajectory Planning Module
+Image 𝐼
+LiDAR 𝐿
+BEV feature
+Ego Status
+Goal Point 
+Vocabulary
+MLP
+Fusion & Select
+Trajectory Decoder
+Trajectory Scorer
+Dis. Score
+DAC Score
+Goal Point
+Figure 2. Overview of the GoalFlow architecture. GoalFlow consists of three modules. The Perception Module is responsible for
+integrating scene information into a BEV feature Fbev, the Goal Point Construction Module selects the optimal goal point from Goal Point
+Vocabulary V as guidance information, and the Trajectory Planning Module generates the trajectories by denoising from the Gaussian
+distribution to the target distribution. Finally, the Trajectory Scorer selects the optimal trajectory from the candidates.
+ing noise have become mainstream.
+DDPM[14] applies
+noise to images during training, converting states over time
+steps, and subsequently denoises them during testing to re-
+construct the image. More recent methods[26] have fur-
+ther optimized sampling efficiency. Additionally, CFG[13]
+has enhanced the robustness of generated outputs. Flow
+Matching[23] establishes a vector field for transitioning
+from one distribution to another. Rectified flow[24], a spe-
+cific form of flow matching, enables a direct, linear tran-
+sition path between distributions. Compared to diffusion
+models, rectified flow often requires only a single inference
+step to achieve good results.
+2.3. MultiModal Trajectories Generation
+In planning tasks, such as manipulation and autonomous
+driving, a given scenario often offers multiple action op-
+tions, requiring effective multimodal modeling.
+Recent
+works[2, 31] in manipulation have explored this by applying
+diffusion models with notable success. Autonomous driv-
+ing has adopted two main multimodal strategies: the first
+uses discrete commands to guide trajectory generation, such
+as in VAD[17], which produces three distinct trajectory
+modes, and SparseDrive[27] and [16], which cluster fixed
+navigation points from datasets for trajectory guidance. The
+second approach introduces diffusion models directly to
+generate multimodal trajectories[18, 29, 32], achieving suc-
+cess in trajectory prediction but facing challenges in end-to-
+end applications. Building on diffusion models, we address
+limitations in accuracy and efficiency by incorporating flow
+matching, using goal points to guide trajectories with preci-
+sion rather than focusing solely on multimodal diversity.
+3. Method
+3.1. Preliminary
+Compared to diffusion, which focuses on learning to reverse
+the gradual addition of noise over time to recover data, flow
+matching[23] focuses on learning invertible transformations
+that map between data distributions. Let π0 denote a sim-
+ple distribution, typically the standard normal distribution
+p(x) = N(x|0, I), and let π1 denote the target distribu-
+tion. Under this framework, rectified flow[24] uses a simple
+and effective method to construct the path through optimal
+transport[25] displacement, which we choose as our Flow
+Matching method.
+Given x0 sampled from π0, x1 sampled from π1, and
+t ∈[0, 1], the path from x0 to x1 is defined as a straight line,
+meaning the intermediate status xt is given by (1 −t)x0 +
+tx1, with the direction of intermediate status consistently
+following x1 −x0. By constructing a neural network vθ
+to predict the direction x1 −x0 based on the current state
+xt and time step t, we can obtain a path from the initial
+distribution π0 to target distribution π1 by optimizing the
+loss between vθ(xt, t) and x1 −x0. This can be formalized
+as:
+vθ(xt, t) ≈Ex0∼π0,x1∼π1[vt|xt]
+(1)
+L(θ) = Ex0∼π0,x1∼π1[∥vθ(xt, t) −(x1 −x0)∥2]
+(2)
+3.2. GoalFlow
+3.2.1. Overview
+GoalFlow is a goal-driven end-to-end autonomous driving
+method that can generate high-quality multimodal trajecto-
+ries. The overall architecture of GoalFlow is illustrated in
+
+=== Page 4 ===
+Figure 2. It comprises three main components. In the Per-
+ception Module, we obtain a BEV feature Fbev that encap-
+sulates environmental information by fusing camera images
+I, and LiDAR data L. The Goal Point Construction Mod-
+ule focuses on generating precise guidance information for
+trajectory generation. It accomplishes this by constructing a
+goal point vocabulary V = {gi}N, and employing a scoring
+mechanism to select the most appropriate goal point g. In
+the Trajectory Planning Module, we produce a set of multi-
+modal trajectories, T = {ˆτi}M, and then identify the opti-
+mal trajectory τ, through a trajectory scoring mechanism.
+3.2.2. Perception Module
+In the first step, we fuse image and LiDAR data to create a
+BEV feature, Fbev, that captures rich road condition infor-
+mation. A single modality often lacks crucial details; for
+example, LiDAR does not capture traffic light information,
+while images cannot precisely locate objects. By fusing dif-
+ferent sensor modalities, we can achieve a more complete
+and accurate representation of the road conditions.
+We adopt the Transfuser architecture [3] for modality fu-
+sion. The forward, left, and right camera views are con-
+catenated into a single image I ∈R3×H1×W1, while Li-
+DAR data is formed as a tensor L ∈RK×3. These in-
+puts are passed through separate backbones, and their fea-
+tures are fused at different layers using multiple transformer
+blocks. The result is a BEV feature, Fbev, which compre-
+hensively represents the scene. To ensure effective inter-
+action between the ego vehicle and surrounding objects, as
+well as map information, we apply auxiliary supervision to
+the BEV feature through losses derived from HD maps and
+bounding boxes.
+3.2.3. Goal Point Construction Module.
+In this module, we construct a precise goal point to
+guide the trajectory generation process.
+Diffusion-based
+approach[18, 32] without constraints often leads to exces-
+sive trajectory divergence, which complicates trajectory se-
+lection. Our key observation is that a goal point contains a
+precise description of the short-term future position, which
+imposes a strong constraint on the generation model. As a
+result, we divide the traditional Planning Module into two
+steps: first, constructing a precise goal point, and second,
+generating the trajectory through planning.
+Goal Point Vocabulary.
+We aim to construct a goal
+point set that provides candidates for the optimal goal point.
+Traditional goal-based methods[11, 34], rely on lane-level
+information from HD map to generate goal point sets for
+trajectory prediction. However, HD maps are expensive,
+making lane information often unavailable in end-to-end
+driving. Inspired by VADv2[1], we discretize the endpoint
+space of trajectories to generate candidate goal points, en-
+abling a solution without relying on HD maps. We clustered
+trajectory endpoints pi = (xi, yi, θi) in the training data
+to create N cluster centers, which form our goal point vo-
+cabulary V. Each endpoint pi represents a position (xi, yi)
+and heading θi. To ensure that the vocabulary represents
+finer-grained locations, we typically set N to a large value,
+generally 4096 or 8192.
+Goal Point Scorer. High-quality trajectories typically
+exhibit the following characteristics: A small distance to the
+ground truth and within the drivable area. To achieve this,
+we evaluate each goal point gi in the vocabulary V using
+two distinct scores: the Distance Score ˆδdis and the Drivable
+Area Compliance Score ˆδdac. The Distance Score measures
+the proximity between the goal point gi and the endpoint of
+ground truth trajectory ggt, with a continuous value in the
+range ˆδdis ∈[0, 1], where a higher value indicates a closer
+match to ggt. The Drivable Area Compliance Score ensures
+that the goal point lies within the drivable area, using a bi-
+nary value ˆδdac ∈{0, 1}, where 1 indicates that the goal
+point is valid within the drivable area, and 0 indicates it is
+not.
+To construct the target distance score δdis
+i , we utilize the
+softmax function to map the Euclidean distance between the
+goal point gi and the ground truth goal point ggt to the inter-
+val [0, 1]. This is defined as:
+δdis
+i
+=
+exp(−∥gi −ggt∥2)
+P
+j exp(−∥gj −ggt∥2)
+(3)
+For the target drivable area compliance score δdac
+i , we
+introduce a shadow vehicle, whose bounding box is deter-
+mined based on the position and heading (xi, yi, θi) in gi
+and the shape of the ego vehicle. Let {pj}4 represent the
+set of four corner positions of the shadow vehicle, and let
+D denote the polygon representing the drivable area. The
+drivable area compliance score δdac
+i
+is defined as:
+δdac
+i
+=
+(
+1,
+if ∀j, pj ∈D◦
+0,
+otherwise
+We compute the final score ˆδfinal
+i
+by aggregating ˆδdis
+i
+and
+ˆδdac
+i . The goal point with the highest final score is selected
+for trajectory generation.
+ˆδfinal
+i
+= w1 log ˆδdis
+i
++ w2 log ˆδdac
+i
+As shown in Fig.3(a), the Transformer-based Scorer De-
+coder uses the result of adding Fv and Fego as the query,
+with Fbev as the key and value. The output is passed through
+two separate MLPs to produce the scores ˆδdis and ˆδdac for
+each point in the V. Fig.3(b) shows the distribution of these
+two scores. With the points in warmer colors representing
+higher scores, we observe that score ˆδdis effectively indi-
+cates the desired future position, while ˆδdac identifies if the
+goal point is within the drivable area.
+
+=== Page 5 ===
+Vocab.
+Encoder
+Ego
+Status
+Ego
+Encoder
+Transformer Decoder
+MLP
+MLP
+V
+𝐸
+𝐹𝑉
+𝐹𝑒𝑔𝑜
+𝐹𝑏𝑒𝑣
+{ δ𝑖
+𝑑𝑖𝑠}𝑁
+{ δ𝑖
+𝑑𝑎𝑐}𝑁
+(a)
+{δ𝑖
+𝑑𝑖𝑠}𝑁
+{δ𝑖
+𝑑𝑎𝑐}𝑁
+𝛿𝑖
+𝑑𝑖𝑠=
+𝑠𝑜𝑓𝑡𝑚𝑎𝑥(-d𝑖)
+𝛿𝑖
+𝑑𝑎𝑐=0
+𝛿𝑗
+𝑑𝑎𝑐=1
+{ δ𝑖
+𝑑𝑖𝑠}𝑁
+{ δ𝑖
+𝑑𝑎𝑐}𝑁
+(b)
+Figure 3. Goal Point Scorer. (a) shows the detailed structure of the Goal Point Construction Module, and (b) presents the score distributions
+of {ˆδdis
+i
+}N, {ˆδdac
+i
+}N, and {ˆδfinal
+i
+}N, where points with higher scores are highlighted with warmer color.
+Trajectory
+Encoder
+Environment 
+Encoder
+Time Step
+Encoder
+Transformer Layer
+𝑄
+𝐹𝑔𝑜𝑎𝑙
+𝑁
+ 𝑣𝑡
+𝐹𝑒𝑛𝑣
+𝐹𝑡𝑟𝑎𝑗
+𝐹𝑡
+𝐹𝑎𝑙𝑙
+𝐹𝑒𝑔𝑜
+Condition
+Transformer Layer
+Transformer Layer
+Transformer Layer
+𝑡
+𝐹𝑏𝑒𝑣
+𝑇𝑟𝑎𝑗𝑡
+Positional
+Encoding
+Figure 4. The network architecture used in Rectified Flow.
+3.2.4. Trajectory Planning Module
+In this module, we generate constrained, high-quality tra-
+jectory candidates using a generative model and then select
+the optimal trajectory through a scoring mechanism. Gen-
+erative models based on diffusion methods like DDPM[14]
+and DDIM[26] typically require complex denoising paths,
+leading to significant time overhead during inference, which
+makes them unsuitable for real-time systems like au-
+tonomous driving. In contrast, Rectified Flow[24], which
+is based on the optimal transport path in flow matching, re-
+quires much fewer inference steps to achieve good results.
+We adopt Rectified Flow as the generative model, using the
+BEV feature and goal point as conditions to generate multi-
+modal trajectories.
+Multimodal Trajectories Generating.
+We generate
+multimodal trajectories by modeling the shift from the noise
+distribution to the target trajectory distribution. During this
+distribution transfer process, given the current state xt and
+time step t, we predict the shift vt.
+vt = τ norm −x0
+(4)
+xt = (1 −t)x0 + tτ norm
+(5)
+τ norm = H(τ gt)
+(6)
+Where τ gt is the ground truth trajectory and τ norm is its
+normalized form. We define H(·) as the normalization op-
+eration applied to the trajectory. The variable x0 represents
+the noise distribution, which follows x0 ∼N(0, σ2I). The
+variable xt is obtained by linearly interpolating between x0
+and τ norm.
+As illustrated in Fig.4, we extract different features
+through a series of encoders. Specifically, we encode xt us-
+ing a linear layer, while t and the goal point are transformed
+into feature vectors via sinusoidal encoding. The feature
+Fenv is obtained by passing the information from Fbev and
+Fego through the environment encoder.
+Fenv = Eenv(Q, (FBEV + Fego), (FBEV + Fego))
+(7)
+Here, Eenv refers to a Transformer-based encoder, Q de-
+notes a learnable embedding, and Fego represents the ego
+status feature, which encodes the kinematic information of
+the ego vehicle.
+We concatenate the features Fenv, Fgoal, Ftraj, and Ft to
+form the overall feature Fall, which encapsulates the current
+state, time step, and scene information. This combined fea-
+ture is then passed through several attention layers to predict
+the distribution shift vt.
+ˆvt = G(Fall, Fall, Fall)
+(8)
+
+=== Page 6 ===
+Fall = Concat(Fenv, Fgoal, Ftraj, Ft)
+(9)
+Where G is the network that consists of N attention layers.
+We reconstruct the trajectory distribution using x0 and
+ˆvt. Typically, we achieve this by performing multiple in-
+ference steps through the Rectified Flow, gradually trans-
+forming the noise distribution x0 to the target distribution
+τ norm. Finally, we apply denormalization to τ norm to obtain
+the final trajectory ˆτ.
+ˆτ = H−1(ˆτ norm)
+(10)
+ˆτ norm = x0 + 1
+n
+n
+X
+i
+ˆvti
+(11)
+Where n is the total inference steps, and ti is the time
+step sampled in the i-th step, which satisfies ti ∈[0, 1].
+H−1(·) is the denormalization operation.
+Trajectory Selecting In trajectory selection, methods
+like SparseDrive[27] and Diffusion-ES[32] rely on kine-
+matic simulation of the generated trajectories to predict po-
+tential collisions with surrounding agents, thus selecting the
+optimal trajectory. This process significantly increases the
+inference time. We simplify this procedure by using the
+goal point as a reference for selecting the trajectory. Specif-
+ically, we trade off the trajectory distance to the goal point
+and ego progress, selecting the optimal trajectory through a
+trajectory scorer.
+f(ˆτi) = −λ1Φ(fdis(ˆτi)) + λ2Φ(fpg(ˆτi))
+(12)
+where Φ(·) is the minimax operation. fdis(ˆτi) presents the
+L2 distance of ˆτi and g, and fpg(ˆτi) presents the L2 distance
+of progress of ˆτi make.
+Furthermore, predicted goal point may contain an error
+that can misguide the trajectory. To mitigate this, we mask
+the goal point during generation to create a shadow trajec-
+tory. If the shadow trajectory deviates significantly from the
+main trajectory, we treat the goal point as unreliable and use
+the shadow as the output.
+3.2.5. Training Losses
+Firstly, we optimize the perception extractor exclusively,
+and enforce multiple perception losses for supervision, in-
+cluding the cross-entropy loss for HD map (LHD) and 3D
+bounding box classification (Lbbox) and L1 loss for 3D
+bounding box locations (Lloc). This stage aims to enrich
+the BEV feature with information on various perceptions.
+Losses are as follows.
+Lperception = w1 ∗LHD + w2 ∗Lbbox + w3 ∗Lloc (13)
+where w1, w2, w3 are set to 10.0, 1.0, 10.0 in training. For
+the goal constructor, we employ the cross entropy loss for
+distance score(Ldis) and DAC score(Ldac). w4, w5 are set
+to 1.0 and 0.005.
+Lgoal = w4 ∗Ldis + w5 ∗Ldac
+(14)
+Ldis = −
+N
+X
+i=1
+δdis
+i
+log(ˆδi
+dis)
+(15)
+Ldac = −δdaclogˆδdac −(1 −δdac)log(1 −ˆδdac)
+(16)
+L1 loss is utilized for multimodal planner.
+Lplanner = |vt −ˆvt|
+(17)
+4. Experiments
+4.1. Dataset
+Our experiment is validated on the Openscene[6] dataset.
+Openscene includes 120 hours of autonomous driving data.
+Its end-to-end environment Navsim[7] uses 1192 and 136
+scenarios for trainval and testing, a total of over 10w sam-
+ples at 2Hz. Each sample contains camera images from 8
+perspectives, fused Lidar data from 5 sensors, ego status,
+and annotations for the map and objects.
+4.2. Metrics
+In the Navsim environment, the generated 2Hz, 4-second
+trajectories are interpolated via an LQR controller to yield
+10Hz, 4-second trajectories. These trajectories are scored
+using closed-loop metrics, including No at-fault Collisions
+SNC, Drivable Area Compliance SDAC, Time to Collision
+ST T C with bounds, Ego Progress SEP , Comfort SCF , and
+Driving Direction Compliance SDDC. The final score is
+derived by aggregating these metrics. Due to practical con-
+straints, SDDC is omitted from the calculation1.
+SP DM = SNC × SDAC × sT T C×
+5 × SEP + 5 × SCF + 2 × SDDC
+12
+
+(18)
+4.3. Baselines
+In Navsim, we compare against the following baselines:
+Constant Velocity Assumes constant speed from the cur-
+rent timestamp for forward movement. Ego Status MLP
+Takes only the current state as input and uses an MLP
+to generate the trajectory.
+PDM-Closed Using ground-
+truth perception as input, several trajectories are gener-
+ated through a rule-based IDM method. The PDM scorer
+then selects the optimal trajectory from these as the out-
+put. Transfuser Uses both image and LiDAR inputs, fus-
+ing them via a transformer into a BEV feature, which is then
+used for trajectory generation. LTF A streamlined version
+1https://github.com/autonomousvision/navsim/issues/14

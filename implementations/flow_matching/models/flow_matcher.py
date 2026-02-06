@@ -72,6 +72,7 @@ class ConditionalFlowMatcher:
         model: nn.Module,
         x_0: torch.Tensor,
         x_1: torch.Tensor,
+        cond: Optional[torch.Tensor] = None,
         t: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
@@ -83,6 +84,7 @@ class ConditionalFlowMatcher:
             model: 速度场网络 v_θ(x, t)
             x_0: 起点（噪声） (B, D)
             x_1: 终点（数据） (B, D)
+            cond: 条件场景（数据） (B, D)
             t: 时间 (B,) 或 None
         
         Returns:
@@ -97,7 +99,11 @@ class ConditionalFlowMatcher:
             t = torch.rand(batch_size, device=x_0.device, dtype=x_0.dtype)
         
         # 网络预测速度
-        v_pred = model(x_t, t)
+        if cond is not None:
+            v_pred = model(x_t, cond, t)
+        else:
+            # 如果没有条件，假设模型只接受 (x, t)
+            v_pred = model(x_t, t)
         
         # MSE Loss
         loss = torch.mean((v_pred - v_true) ** 2)
@@ -108,6 +114,7 @@ class ConditionalFlowMatcher:
         self,
         model: nn.Module,
         x_0: torch.Tensor,
+        cond: Optional[torch.Tensor] = None,
         num_steps: int = 50,
         method: str = 'rk4'
     ) -> Tuple[torch.Tensor, list]:
@@ -117,6 +124,7 @@ class ConditionalFlowMatcher:
         Args:
             model: 训练好的速度场网络
             x_0: 初始噪声 (B, D)
+            cond: 条件输入 (B, cond_dim)，可选
             num_steps: ODE 求解步数
             method: 'euler' 或 'rk4'
         
@@ -131,7 +139,10 @@ class ConditionalFlowMatcher:
         
         # 创建速度场函数
         def velocity_field(x, t):
-            return model(x, t)
+            if cond is not None:
+                return model(x, cond, t)
+            else:
+                return model(x, t)
         
         # 求解 ODE
         solver = ODESolver(method=method)
@@ -227,6 +238,7 @@ if __name__ == "__main__":
         x_0, x_1 = create_simple_data()
         
         optimizer.zero_grad()
+        # SimpleVelocityNet 不需要 cond，所以不传递
         loss = flow_matcher.compute_cfm_loss(model, x_0, x_1)
         loss.backward()
         optimizer.step()

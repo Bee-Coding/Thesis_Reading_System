@@ -14,6 +14,7 @@ from typing import Optional, Tuple, Dict
 from models.flow_matcher import ConditionalFlowMatcher
 from models.time_embedding import SinusoidalEmbedding
 from data.toy_dataset import ToyTrajectoryDataset
+from models.velocity_field_MLP import VelocityFieldMLP
 
 
 # ============================================================================
@@ -131,8 +132,9 @@ class Trainer:
         
         for batch in pbar:
             # 1. 提取数据
-            # batch 是字典: {'trajectory': (B, 6, 2), 'type': list}
+            # batch 是字典: {'trajectory': (B, 6, 2), 'type': list, 'condition': (B, 8)}
             x_1 = batch['trajectory'].to(self.device)  # (B, 6, 2)
+            cond = batch['condition'].to(self.device)  # (B, 8)
             
             # 2. Flatten 轨迹: (B, 6, 2) -> (B, 12)
             batch_size = x_1.shape[0]
@@ -145,7 +147,7 @@ class Trainer:
             self.optimizer.zero_grad()
             
             # 5. 计算 CFM Loss
-            loss = self.flow_matcher.compute_cfm_loss(self.model, x_0, x_1)
+            loss = self.flow_matcher.compute_cfm_loss(self.model, x_0, x_1, cond)
             
             # 6. 反向传播
             loss.backward()
@@ -189,6 +191,7 @@ class Trainer:
             for batch in pbar:
                 # 1. 提取数据
                 x_1 = batch['trajectory'].to(self.device)  # (B, 6, 2)
+                cond = batch['condition'].to(self.device)  # (B, 8)
                 
                 # 2. Flatten
                 batch_size = x_1.shape[0]
@@ -198,7 +201,7 @@ class Trainer:
                 x_0 = torch.randn_like(x_1) * 0.5
                 
                 # 4. 计算损失（不需要反向传播）
-                loss = self.flow_matcher.compute_cfm_loss(self.model, x_0, x_1)
+                loss = self.flow_matcher.compute_cfm_loss(self.model, x_0, x_1, cond)
                 
                 # 5. 累计损失
                 total_loss += loss.item()
@@ -326,11 +329,13 @@ def main():
     
     # 创建模型
     state_dim = 12  # 6个点 × 2维
-    model = SimpleVelocityField(
+    cond_dim = 8  # goal(2) + direction(2) + type_onehot(4)
+    model = VelocityFieldMLP(
         state_dim=state_dim,
+        cond_dim=cond_dim,
         time_dim=128,
         hidden_dim=args.hidden_dim,
-        num_layers=args.num_layers,
+        num_hidden_layers=args.num_layers,  # 注意：VelocityFieldMLP 使用 num_hidden_layers
         dropout=0.1
     ).to(device)
     

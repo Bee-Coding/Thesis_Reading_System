@@ -216,14 +216,42 @@ class ToyTrajectoryDataset(Dataset):
         """
         trajectory = self.trajectories[idx]  # shape: (6, 2)
         traj_type = str(self.types[idx])
+        cond = self._generate_condition(trajectory, traj_type)
         
         if self.transform:
             trajectory = self.transform(trajectory)
         
         return {
             'trajectory': torch.from_numpy(trajectory).float(),
-            'type': traj_type
+            'type': traj_type,
+            'condition': cond
         }
+
+    def _generate_condition(self, trajectory: np.ndarray, traj_type: str) -> torch.Tensor:
+        """
+        生成条件向量
+        
+        Args:
+            trajectory: numpy array, shape (6, 2)
+            traj_type: 轨迹类型字符串
+            
+        Returns:
+            condition: torch.Tensor, shape (8,) = goal(2) + direction(2) + type_onehot(4)
+        """
+        # Goal Point: 终点坐标作为goal point
+        goal_point = trajectory[-1]  # shape: (2,)
+        
+        # Ego State： 起点速度方向
+        direction = trajectory[1] - trajectory[0]  # shape: (2,)
+        
+        # Trajectory Type: one-hot编码
+        type_map = {'circle': 0, 'line': 1, 's_curve': 2, 'polynomial': 3}
+        type_onehot = np.zeros(4, dtype=np.float32)
+        type_onehot[type_map[traj_type]] = 1.0
+
+        # 拼接所有条件 (全部使用 numpy)
+        cond = np.concatenate([goal_point, direction, type_onehot])  # shape: (8,)
+        return torch.from_numpy(cond).float()
 
 
 def generate_and_save_dataset(

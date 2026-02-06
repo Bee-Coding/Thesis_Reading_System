@@ -11,18 +11,19 @@ from pathlib import Path
 import argparse
 
 from models.flow_matcher import ConditionalFlowMatcher
-from train import SimpleVelocityField
+from models.velocity_field_MLP import VelocityFieldMLP
 from data.toy_dataset import ToyTrajectoryDataset
 
 
 def load_model(checkpoint_path: str, device: torch.device):
     """加载训练好的模型"""
     # 创建模型
-    model = SimpleVelocityField(
+    model = VelocityFieldMLP(
         state_dim=12,
+        cond_dim=8,  # goal(2) + direction(2) + type_onehot(4)
         time_dim=128,
         hidden_dim=256,
-        num_layers=4,
+        num_hidden_layers=4,
         dropout=0.1
     ).to(device)
     
@@ -38,35 +39,102 @@ def load_model(checkpoint_path: str, device: torch.device):
     return model
 
 
+def sample_conditions_from_dataset(
+    dataset: ToyTrajectoryDataset, 
+    num_samples: int, 
+    device: torch.device
+) -> tuple:
+    """
+    从数据集采样真实条件
+    
+    Args:
+        dataset: 数据集
+        num_samples: 采样数量
+        device: 设备
+        
+    Returns:
+        conditions: (num_samples, 8) 条件张量
+        condition_info: list of dict，包含每个条件的详细信息
+    """
+    conditions = []
+    condition_info = []
+    indices = torch.randint(0, len(dataset), (num_samples,))
+    
+    for idx in indices:
+        sample = dataset[int(idx)]
+        cond = sample['condition']
+        conditions.append(cond)
+        
+        # 解析条件信息
+        goal_point = cond[:2].numpy()
+        direction = cond[2:4].numpy()
+        type_onehot = cond[4:].numpy()
+        type_idx = int(type_onehot.argmax())
+        type_names = ['circle', 'line', 's_curve', 'polynomial']
+        
+        condition_info.append({
+            'goal_point': goal_point,
+            'direction': direction,
+            'type': type_names[type_idx],
+            'trajectory': sample['trajectory'].numpy()  # 保存真实轨迹用于对比
+        })
+    
+    conditions = torch.stack(conditions).to(device)
+    return conditions, condition_info
+
+
 def generate_trajectories(
     model: torch.nn.Module,
     flow_matcher: ConditionalFlowMatcher,
+    dataset: ToyTrajectoryDataset,
     num_samples: int = 16,
     num_steps: int = 50,
     method: str = 'rk4',
     device: torch.device = torch.device('cpu')
 ):
-    """生成轨迹"""
+    """
+    生成轨迹
+    
+    Args:
+        model: 训练好的模型
+        flow_matcher: Flow Matcher
+        dataset: 数据集（用于采样条件）
+        num_samples: 生成样本数量
+        num_steps: ODE 求解步数
+        method: ODE 求解方法
+        device: 设备
+        
+    Returns:
+        x_1_np: 生成的轨迹 (num_samples, 6, 2)
+        trajectory_np: 完整生成过程
+        condition_info: 条件信息列表
+    """
     model.eval()
+    
+    # 从数据集采样条件
+    conditions, condition_info = sample_conditions_from_dataset(
+        dataset, num_samples, device
+    )
     
     with torch.no_grad():
         # 采样初始噪声
         x_0 = torch.randn(num_samples, 12, device=device) * 0.5
         
-        # 生成轨迹
+        # 生成轨迹（传递条件）
         x_1, trajectory = flow_matcher.sample_trajectory(
-            model, x_0, num_steps=num_steps, method=method
+            model, x_0, cond=conditions, num_steps=num_steps, method=method
         )
         
         # 转换为 numpy 并 reshape
         trajectory_np = [t.cpu().numpy().reshape(-1, 6, 2) for t in trajectory]
         x_1_np = x_1.cpu().numpy().reshape(-1, 6, 2)
     
-    return x_1_np, trajectory_np
+    return x_1_np, trajectory_np, condition_info
 
 
 def plot_trajectories(
     generated_trajs: np.ndarray,
+    condition_info: list = None,
     real_trajs: np.ndarray = None,
     save_path: str = None,
     title: str = "Generated Trajectories"
@@ -76,6 +144,7 @@ def plot_trajectories(
     
     Args:
         generated_trajs: 生成的轨迹 (N, 6, 2)
+        condition_info: 条件信息列表
         real_trajs: 真实轨迹 (N, 6, 2)，可选
         save_path: 保存路径
         title: 图表标题
@@ -99,6 +168,11 @@ def plot_trajectories(
         ax.plot(traj[0, 0], traj[0, 1], 'go', markersize=10, label='Start')
         ax.plot(traj[-1, 0], traj[-1, 1], 'ro', markersize=10, label='End')
         
+        # 如果有条件信息，标记目标点
+        if condition_info is not None and idx < len(condition_info):
+            goal = condition_info[idx]['goal_point']
+            ax.plot(goal[0], goal[1], 'r*', markersize=15, label='Goal', zorder=10)
+        
         # 如果有真实轨迹，也绘制出来
         if real_trajs is not None and idx < len(real_trajs):
             real_traj = real_trajs[idx]
@@ -112,7 +186,14 @@ def plot_trajectories(
         ax.set_aspect('equal')
         ax.set_xlabel('X (m)')
         ax.set_ylabel('Y (m)')
-        ax.set_title(f'Sample {idx + 1}')
+        
+        # 设置标题，显示条件信息
+        if condition_info is not None and idx < len(condition_info):
+            traj_type = condition_info[idx]['type']
+            goal = condition_info[idx]['goal_point']
+            ax.set_title(f'{traj_type}\nGoal: ({goal[0]:.1f}, {goal[1]:.1f})', fontsize=9)
+        else:
+            ax.set_title(f'Sample {idx + 1}')
         
         if idx == 0:
             ax.legend(loc='upper right', fontsize=8)
@@ -183,17 +264,15 @@ def compare_with_real_data(
     save_path: str = None
 ):
     """对比生成数据和真实数据"""
-    # 生成轨迹
-    generated_trajs, _ = generate_trajectories(
-        model, flow_matcher, num_samples, device=device
+    # 生成轨迹（传递 dataset 参数）
+    generated_trajs, _, condition_info = generate_trajectories(
+        model, flow_matcher, dataset, num_samples, device=device
     )
     
-    # 获取真实轨迹
+    # 从 condition_info 中提取真实轨迹
     real_trajs = []
-    for i in range(num_samples):
-        sample = dataset[i]
-        traj = sample['trajectory'].numpy().reshape(6, 2)
-        real_trajs.append(traj)
+    for info in condition_info:
+        real_trajs.append(info['trajectory'])
     real_trajs = np.array(real_trajs)
     
     # 绘制对比图
@@ -284,9 +363,9 @@ def main():
     print("="*60)
     
     # 1. 生成轨迹
-    print("\n[1/3] 生成轨迹...")
-    generated_trajs, trajectory_list = generate_trajectories(
-        model, flow_matcher, 
+    print("\n[1/4] 生成轨迹...")
+    generated_trajs, trajectory_list, condition_info = generate_trajectories(
+        model, flow_matcher, val_dataset,
         num_samples=args.num_samples,
         num_steps=args.num_steps,
         method=args.method,
@@ -294,15 +373,16 @@ def main():
     )
     
     # 2. 绘制生成的轨迹
-    print("\n[2/3] 绘制生成的轨迹...")
+    print("\n[2/4] 绘制生成的轨迹...")
     plot_trajectories(
         generated_trajs,
+        condition_info=condition_info,
         save_path=str(save_dir / 'generated_trajectories.png'),
         title=f'Generated Trajectories ({args.method.upper()}, {args.num_steps} steps)'
     )
     
     # 3. 绘制生成过程
-    print("\n[3/3] 绘制生成过程...")
+    print("\n[3/4] 绘制生成过程...")
     plot_generation_process(
         trajectory_list,
         sample_idx=0,
