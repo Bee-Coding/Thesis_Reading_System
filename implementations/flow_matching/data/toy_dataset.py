@@ -18,106 +18,125 @@ class TrajectoryGenerator:
     def __init__(
         self,
         num_points: int = 6,
-        coord_range: Tuple[float, float] = (-10, 10),
-        radius_range: Tuple[float, float] = (2, 5),
+        output_range: Tuple[float, float] = (-20, 20),
+        radius_range: Tuple[float, float] = (5.2, 9),
         length_range: Tuple[float, float] = (5, 15)
     ):
         """
         Args:
             num_points: 轨迹点数量
-            coord_range: 坐标范围 (min, max)
+            output_range: s输出范围 (min, max)
             radius_range: 圆形半径范围 (min, max)
             length_range: 直线/曲线长度范围 (min, max)
         """
         self.num_points = num_points
-        self.coord_range = coord_range
+        self.output_range = output_range
         self.radius_range = radius_range
         self.length_range = length_range
     
     def generate_circle(self) -> np.ndarray:
         """
-        生成圆形轨迹
+        生成圆形轨迹（自车中心坐标系）
+        自车在原点 (0, 0)，沿圆弧轨迹移动
         
         Returns:
             trajectory: shape (num_points, 2)
         """
-        # 随机圆心
-        center_x = np.random.uniform(*self.coord_range)
-        center_y = np.random.uniform(*self.coord_range)
-        
         # 随机半径
         radius = np.random.uniform(*self.radius_range)
         
         # 随机起始角度
         start_angle = np.random.uniform(0, 2 * np.pi)
+
+        # 随机圆弧角度
+        arc_angle = np.random.uniform(np.pi / 4, np.pi)
+
+        # 圆心坐标（使自车在圆周上）
+        center_x = 0.0 - radius * np.cos(start_angle)
+        center_y = 0.0 - radius * np.sin(start_angle)
         
         # 生成圆周上的点
-        angles = np.linspace(start_angle, start_angle + 2 * np.pi, 
+        angles = np.linspace(start_angle, start_angle + arc_angle, 
                             self.num_points, endpoint=False)
         x = center_x + radius * np.cos(angles)
         y = center_y + radius * np.sin(angles)
+
+        trajectory = np.stack([x, y], axis=1)  # shape: (num_points, 2)
         
-        return np.stack([x, y], axis=1)  # shape: (num_points, 2)
+        # 裁剪到output_range范围内
+        if self.output_range:
+            trajectory = np.clip(trajectory, 
+                               self.output_range[0], 
+                               self.output_range[1])
+        
+        return trajectory
     
     def generate_line(self) -> np.ndarray:
         """
-        生成直线轨迹
+        生成直线轨迹（自车中心坐标系）
+        自车在原点 (0, 0)，沿x轴方向直线前进
         
         Returns:
             trajectory: shape (num_points, 2)
         """
-        # 随机起点
-        start_x = np.random.uniform(*self.coord_range)
-        start_y = np.random.uniform(*self.coord_range)
-        
-        # 随机方向角度
-        angle = np.random.uniform(0, 2 * np.pi)
+        start_x = 0.0
+        start_y = 0.0
         
         # 随机长度
         length = np.random.uniform(*self.length_range)
         
-        # 生成直线上的点
+        # 生成直线上的点（沿x轴方向）
         t = np.linspace(0, 1, self.num_points)
-        x = start_x + length * np.cos(angle) * t
-        y = start_y + length * np.sin(angle) * t
+        x = start_x + length * t
+        y = np.full(self.num_points, start_y)  # y保持为0，符合车辆运动学
+
+        trajectory = np.stack([x, y], axis=1)  # shape: (num_points, 2)
         
-        return np.stack([x, y], axis=1)
+        # 裁剪到output_range范围内
+        if self.output_range:
+            trajectory = np.clip(trajectory, 
+                               self.output_range[0], 
+                               self.output_range[1])
+        
+        return trajectory 
     
     def generate_s_curve(self) -> np.ndarray:
         """
-        生成S形曲线轨迹
+        生成S形曲线轨迹（自车中心坐标系）
+        自车在原点 (0, 0)，沿S形曲线移动
         
         Returns:
             trajectory: shape (num_points, 2)
         """
-        # 随机起点
-        start_x = np.random.uniform(*self.coord_range)
-        start_y = np.random.uniform(*self.coord_range)
-        
         # 随机振幅和长度
         amplitude = np.random.uniform(2, 5)
         length = np.random.uniform(*self.length_range)
         
         # 生成S形曲线
         t = np.linspace(0, 1, self.num_points)
-        x = start_x + length * t
-        y = start_y + amplitude * np.sin(2 * np.pi * t)
+        x = length * t
+        y = amplitude * np.sin(2 * np.pi * t)
         
-        return np.stack([x, y], axis=1)
+        trajectory = np.stack([x, y], axis=1)  # shape: (num_points, 2)
+        
+        # 裁剪到output_range范围内
+        if self.output_range:
+            trajectory = np.clip(trajectory, 
+                               self.output_range[0], 
+                               self.output_range[1])
+        
+        return trajectory 
     
     def generate_polynomial(self) -> np.ndarray:
         """
-        生成二次多项式（抛物线）轨迹
+        生成二次多项式（抛物线）轨迹（自车中心坐标系）
+        自车在原点 (0, 0)，沿抛物线轨迹移动
         
         Returns:
             trajectory: shape (num_points, 2)
         """
-        # 随机起点
-        start_x = np.random.uniform(*self.coord_range)
-        start_y = np.random.uniform(*self.coord_range)
-        
         # 随机二次多项式系数
-        # y = a*x^2 + b*x + c (相对于起点)
+        # y = a*x^2 + b*x (相对于起点)
         a = np.random.uniform(-0.5, 0.5)
         b = np.random.uniform(-2, 2)
         
@@ -126,14 +145,20 @@ class TrajectoryGenerator:
         
         # 生成抛物线上的点
         t = np.linspace(0, 1, self.num_points)
-        x_rel = length * t  # 相对x坐标
-        y_rel = a * x_rel**2 + b * x_rel  # 相对y坐标
+        x = length * t  # x坐标
+        y = a * x**2 + b * x  # y坐标
         
-        x = start_x + x_rel
-        y = start_y + y_rel
+        trajectory = np.stack([x, y], axis=1)  # shape: (num_points, 2)
         
-        return np.stack([x, y], axis=1)
+        # 裁剪到output_range范围内
+        if self.output_range:
+            trajectory = np.clip(trajectory, 
+                               self.output_range[0], 
+                               self.output_range[1])
+        
+        return trajectory 
     
+
     def generate(self, traj_type: str) -> np.ndarray:
         """     根据类型生成轨迹
         
@@ -206,8 +231,8 @@ def generate_and_save_dataset(
     train_size: int = 5000,
     val_size: int = 500,
     num_points: int = 6,
-    coord_range: Tuple[float, float] = (-10, 10),
-    radius_range: Tuple[float, float] = (2, 5),
+    output_range: Tuple[float, float] = (-20, 20),
+    radius_range: Tuple[float, float] = (5.2, 9),
     length_range: Tuple[float, float] = (5, 15),
     seed: int = 42
 ):
@@ -219,7 +244,7 @@ def generate_and_save_dataset(
         train_size: 训练集大小
         val_size: 验证集大小
         num_points: 每条轨迹的点数
-        coord_range: 坐标范围
+        output_range: 坐标范围
         radius_range: 圆形半径范围
         length_range: 直线/曲线长度范围
         seed: 随机种子
@@ -233,7 +258,7 @@ def generate_and_save_dataset(
     # 创建生成器
     generator = TrajectoryGenerator(
         num_points=num_points,
-        coord_range=coord_range,
+        output_range=output_range,
         radius_range=radius_range,
         length_range=length_range
     )
@@ -298,8 +323,8 @@ if __name__ == "__main__":
     
     generator = TrajectoryGenerator(
         num_points=6,
-        coord_range=(-10, 10),
-        radius_range=(2, 5),
+        output_range=(-20, 20),
+        radius_range=(5.2, 9),
         length_range=(5, 15)
     )
     
@@ -326,8 +351,8 @@ if __name__ == "__main__":
         train_size=5000,
         val_size=500,
         num_points=6,
-        coord_range=(-10, 10),
-        radius_range=(2, 5),
+        output_range=(-20, 20),
+        radius_range=(5.2, 9),
         length_range=(5, 15),
         seed=42
     )

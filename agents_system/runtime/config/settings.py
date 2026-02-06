@@ -131,6 +131,28 @@ class CircuitBreakerConfig:
 
 
 @dataclass
+class Mem0Config:
+    """Mem0记忆管理配置"""
+    api_key: Optional[str] = None
+    enabled: bool = True
+    user_id: str = "zhn"
+    organization_id: str = "thesis_reading_system"
+    auto_save: bool = True
+    context_window: int = 10
+    relevance_threshold: float = 0.7
+    
+    def __post_init__(self):
+        # 从环境变量读取配置
+        self.api_key = os.getenv("MEM0_API_KEY", self.api_key)
+        self.enabled = os.getenv("MEM0_ENABLED", str(self.enabled)).lower() == "true"
+        self.user_id = os.getenv("MEM0_USER_ID", self.user_id)
+        self.organization_id = os.getenv("MEM0_ORGANIZATION_ID", self.organization_id)
+        self.auto_save = os.getenv("MEMORY_AUTO_SAVE", str(self.auto_save)).lower() == "true"
+        self.context_window = int(os.getenv("MEMORY_CONTEXT_WINDOW", str(self.context_window)))
+        self.relevance_threshold = float(os.getenv("MEMORY_RELEVANCE_THRESHOLD", str(self.relevance_threshold)))
+
+
+@dataclass
 class Settings:
     """全局设置"""
     # 基础路径 - 指向项目根目录
@@ -142,6 +164,7 @@ class Settings:
     quality_gate: QualityGateConfig = field(default_factory=QualityGateConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
     circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
+    mem0: Mem0Config = field(default_factory=Mem0Config)
     
     # 目录配置
     @property
