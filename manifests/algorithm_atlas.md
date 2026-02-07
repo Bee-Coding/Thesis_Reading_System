@@ -1,7 +1,7 @@
 # 自动驾驶算法技术图谱
 
-**最后更新**: 2026-02-04  
-**总原子数**: 3  
+**最后更新**: 2026-02-07  
+**总原子数**: 9  
 **覆盖领域**: 轨迹生成  
 **论文数量**: 1
 
@@ -77,7 +77,7 @@
 - **数学基础**: 
   - 训练目标: `L_FM = E[||v_θ(x_t, t) - (x_1 - x_0)||^2]`
   - 推理路径: `x_t = (1-t)x_0 + t*x_1, t ∈ [0,1]`
-- **关键原子**: `METHOD_FLOW_MATCHING_INFERENCE_01`
+- **关键原子**: `METHOD_FLOW_MATCHING_INFERENCE_01`, `MATH_GOALFLOW_CFM_LOSS_01`
 - **应用场景**: 轨迹生成、图像生成、分子设计
 - **优势**: 
   - 推理速度快（单步或少步）
@@ -91,7 +91,7 @@
 ### Goal Point
 - **定义**: 轨迹终点的显式表示，用于引导生成过程并解决多模态混淆问题
 - **实现方式**: Goal Point Vocabulary（预定义候选点集合）
-- **关键原子**: `CONCEPT_GOALFLOW_FRAMEWORK_01`
+- **关键原子**: `CONCEPT_GOALFLOW_FRAMEWORK_01`, `MATH_GOALFLOW_DISTANCE_SCORE_01`, `MATH_GOALFLOW_DAC_SCORE_01`, `MATH_GOALFLOW_FINAL_SCORE_01`
 - **应用场景**: 多模态轨迹生成、停车位选择、路径规划
 - **优势**: 
   - 解决模态混淆（避免生成"既不左也不右"的无效轨迹）
@@ -104,13 +104,44 @@
 
 ### Multimodal Trajectory Generation
 - **定义**: 在给定场景下生成多条合理的候选轨迹，对应不同的驾驶意图
-- **关键原子**: `CONCEPT_GOALFLOW_FRAMEWORK_01`, `FINDING_FLOWMATCHING_EFFICIENCY_01`
+- **关键原子**: `CONCEPT_GOALFLOW_FRAMEWORK_01`, `FINDING_FLOWMATCHING_EFFICIENCY_01`, `MATH_GOALFLOW_TRAJECTORY_SELECT_01`, `MATH_GOALFLOW_INFERENCE_01`
 - **应用场景**: AVP泊车（多个车位选择）、城区导航（多条路径）
 - **技术挑战**: 
   - 模态混淆问题
   - 轨迹多样性与合理性的平衡
   - 高效的多模态推理
 - **GoalFlow的解决方案**: 先生成目标点，再生成轨迹
+
+### GoalFlow核心数学公式
+- **Conditional Flow Matching损失函数**: 训练目标为最小化预测速度场与真实方向之间的L2距离
+  - **关键原子**: `MATH_GOALFLOW_CFM_LOSS_01`
+  - **公式**: `L(θ) = E_{x_0∼π_0,x_1∼π_1}[∥v_θ(x_t, t) - (x_1 - x_0)∥²]`
+  - **物理意义**: 学习从噪声分布到目标分布的直线路径方向
+
+- **目标点距离评分**: 使用softmax归一化的负欧氏距离评估候选点与真实点的接近程度
+  - **关键原子**: `MATH_GOALFLOW_DISTANCE_SCORE_01`
+  - **公式**: `δ_dis_i = exp(-∥g_i - g_gt∥²) / Σ_j exp(-∥g_j - g_gt∥²)`
+  - **物理意义**: 概率化的距离评估，便于多目标点比较
+
+- **可行驶区域合规性评分**: 二进制评分检查目标点是否在可行驶区域内
+  - **关键原子**: `MATH_GOALFLOW_DAC_SCORE_01`
+  - **逻辑**: `δ_dac_i = 1 if ∀j, p_j ∈ D◦ else 0`
+  - **物理意义**: 确保目标点物理可达，避免选择在障碍物上的点
+
+- **目标点综合评分**: 加权对数结合距离和DAC分数
+  - **关键原子**: `MATH_GOALFLOW_FINAL_SCORE_01`
+  - **公式**: `δ_final_i = w1·log(δ_dis_i) + w2·log(δ_dac_i)`
+  - **物理意义**: 多目标优化问题的可学习评分函数
+
+- **Flow Matching多步推理**: 通过多步平均预测速度场实现分布转换
+  - **关键原子**: `MATH_GOALFLOW_INFERENCE_01`
+  - **公式**: `τ_norm_hat = x_0 + (1/n) Σ_i v_ti_hat`
+  - **物理意义**: 支持1步到多步的灵活推理，平衡精度和计算开销
+
+- **轨迹评分与选择**: 权衡轨迹到目标点的距离和自车前进进度
+  - **关键原子**: `MATH_GOALFLOW_TRAJECTORY_SELECT_01`
+  - **公式**: `f(τ_i_hat) = -λ1·Φ(f_dis(τ_i_hat)) + λ2·Φ(f_pg(τ_i_hat))`
+  - **物理意义**: 二级评分体系，确保生成轨迹的高质量和合理性
 
 ---
 

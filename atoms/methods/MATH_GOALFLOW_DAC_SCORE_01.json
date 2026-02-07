@@ -1,0 +1,33 @@
+{
+  "asset_id": "MATH_GOALFLOW_DAC_SCORE_01",
+  "category": "Method",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-07T14:07:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#DAC", "#Drivable_Area", "#Binary_Score", "#GoalFlow"]
+  },
+  "content": {
+    "technique_name": "可行驶区域合规性评分",
+    "technical_description": "GoalFlow中用于评估候选目标点是否在可行驶区域内的二进制评分机制，通过检查shadow车辆的四个角点是否都在可行驶区域多边形内来判断。",
+    "mathematical_intuition": "该评分函数将连续的位置判断转换为二进制分数（0或1），确保选择的目标点不仅距离近，而且在物理上可到达，避免选择在障碍物上或不可行驶区域的目标点。",
+    "avp_relevance": "在AVP停车场场景中，可行驶区域合规性至关重要，避免规划出穿越墙壁、柱子或其他障碍物的轨迹，确保泊车安全性和可行性。",
+    "assumptions": ["可行驶区域多边形D已知", "shadow车辆尺寸与自车相同", "角点位置计算准确"],
+    "boundary_conditions": "当可行驶区域标注不准确或存在动态障碍物时，二进制判断可能过于严格。",
+    "key_equations": {
+      "dac_score_logic": "δ_dac_i = 1 if ∀j, p_j ∈ D◦ else 0",
+      "corner_points": "{p_j}_4 = 基于g_i=(x_i,y_i,θ_i)和车辆形状计算的四个角点"
+    }
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 3.2.3 Goal Point Construction Module, Page 4",
+    "atom_path": "/atoms/methods/MATH_GOALFLOW_DAC_SCORE_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["MATH_GOALFLOW_DISTANCE_SCORE_01"],
+    "incremental_value": "这是GoalFlow在可行驶区域约束方面的核心创新，将传统规划中的硬约束转换为可学习的评分机制，显著提升了DAC指标。",
+    "contradiction_marked": false
+  }
+}

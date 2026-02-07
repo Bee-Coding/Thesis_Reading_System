@@ -1,0 +1,34 @@
+{
+  "asset_id": "MATH_GOALFLOW_INFERENCE_01",
+  "category": "Method",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-07T14:09:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#Inference", "#Flow_Matching", "#Multi_Step", "#GoalFlow"]
+  },
+  "content": {
+    "technique_name": "Flow Matching多步推理过程",
+    "technical_description": "GoalFlow中通过多步平均预测速度场来实现从噪声分布到目标轨迹分布的转换，支持1步到多步的灵活推理。",
+    "mathematical_intuition": "通过将时间区间[0,1]离散为n个步长，在每个步长上预测速度场并累加，最终通过反归一化得到物理轨迹。当n=1时即为单步推理，当n>1时通过多步平均提高精度。",
+    "avp_relevance": "在AVP实时性要求高的场景中，可以使用n=1的单步推理；在对精度要求更高的场景中，可以使用n>1的多步推理，平衡精度和计算开销。",
+    "assumptions": ["速度场预测足够准确", "时间步长均匀分布", "线性插值路径假设成立"],
+    "boundary_conditions": "当轨迹空间高度非线性时，可能需要更多推理步数或更小的时间步长来逼近目标分布。",
+    "key_equations": {
+      "multi_step_inference": "τ_norm_hat = x_0 + (1/n) Σ_i v_ti_hat",
+      "denormalization": "τ_hat = H^{-1}(τ_norm_hat)",
+      "time_sampling": "t_i ∈ [0,1], i=1,...,n"
+    }
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 3.2.4 Trajectory Planning Module, Page 5-6, Equations (10)-(11)",
+    "atom_path": "/atoms/methods/MATH_GOALFLOW_INFERENCE_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["METHOD_FLOW_MATCHING_INFERENCE_01"],
+    "incremental_value": "这是Flow Matching在轨迹生成任务中的具体推理公式，明确了多步平均的实现方式，相比通用的Flow Matching推理提供了具体的数值积分方法。",
+    "contradiction_marked": false
+  }
+}

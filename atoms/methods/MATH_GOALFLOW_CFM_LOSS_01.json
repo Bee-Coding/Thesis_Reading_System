@@ -1,0 +1,33 @@
+{
+  "asset_id": "MATH_GOALFLOW_CFM_LOSS_01",
+  "category": "Method",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-07T14:05:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#Flow_Matching", "#Loss_Function", "#GoalFlow", "#Conditional"]
+  },
+  "content": {
+    "technique_name": "Conditional Flow Matching 损失函数",
+    "technical_description": "GoalFlow使用的Conditional Flow Matching训练目标，通过最小化预测速度场与真实方向之间的L2距离来学习概率流ODE。",
+    "mathematical_intuition": "该损失函数鼓励神经网络v_θ学习从噪声分布π_0到目标轨迹分布π_1的直线路径方向。当x_t = (1-t)x_0 + tx_1时，真实方向是x_1 - x_0，网络需要预测这个方向。",
+    "avp_relevance": "在AVP场景中，该损失函数确保学习到的轨迹生成器能够从高斯噪声稳定地生成到目标轨迹，对于记忆泊车场景的轨迹生成质量至关重要。",
+    "assumptions": ["轨迹分布π_1是可学习的", "噪声分布π_0是标准正态分布", "直线路径假设在轨迹空间中成立"],
+    "boundary_conditions": "在极端复杂的轨迹形状或高度非线性动力学约束下，直线路径假设可能需要更多推理步数。",
+    "key_equations": {
+      "flow_matching_objective": "L(θ) = E_{x_0∼π_0,x_1∼π_1}[∥v_θ(x_t, t) - (x_1 - x_0)∥²]",
+      "interpolation": "x_t = (1-t)x_0 + t·x_1, t ∈ [0,1]"
+    }
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 3.1 Preliminary, Page 3, Equation (2)",
+    "atom_path": "/atoms/methods/MATH_GOALFLOW_CFM_LOSS_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["METHOD_FLOW_MATCHING_INFERENCE_01"],
+    "incremental_value": "这是Flow Matching在GoalFlow中的具体实现形式，相比通用的Flow Matching损失，这里明确用于轨迹生成任务，并且是条件化的（包含BEV特征、目标点等条件）。",
+    "contradiction_marked": false
+  }
+}

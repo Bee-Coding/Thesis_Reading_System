@@ -1,19 +1,21 @@
 # Flow Matching 学习进度记录
 
-**最后更新时间**：2026-02-06  
-**当前阶段**：阶段 1 - 深入理解 GoalFlow 论文
+**最后更新时间**：2026-02-08  
+**当前阶段**：阶段 2 - 论文复现（深度学习中）
 
 ---
 
 ## 📊 总体进度
 
 ```
-[████████░░░░░░░░░░░░] 40% 完成
+[███████████████░░░░░] 70% 完成
 
-阶段 1: 理论学习与分析 ████████░░ 80%
-阶段 2: 论文复现        ░░░░░░░░░░  0%
-阶段 3: AVP 场景适配    ░░░░░░░░░░  0%
-阶段 4: 数据收集与优化  ░░░░░░░░░░  0%
+阶段 1: 理论学习与分析 ████████████ 100% ✅
+阶段 2: 论文复现        ████████░░░░  60% 🔄
+  - 深度教学完成      ████████████ 100% ✅
+  - 编码实践          ░░░░░░░░░░░░   0% ⏳
+阶段 3: AVP 场景适配    ░░░░░░░░░░░░   0% ⏳
+阶段 4: 数据收集与优化  ░░░░░░░░░░░░   0% ⏳
 ```
 
 ---
@@ -83,7 +85,7 @@
 
 ---
 
-### 3. GoalFlow 论文理解（80%）
+### 3. GoalFlow 论文理解（100%）
 
 **已理解的内容**：
 
@@ -126,96 +128,205 @@
 
 ---
 
-## 🎯 当前任务：阶段 1 - 深入理解 GoalFlow
+### 4. GoalFlow 深度分析与原子创建（100%）
 
-### 待完成任务
+**分析成果**：
+- ✅ **精读论文方法部分**：完整理解第3-6页所有公式和算法
+- ✅ **提取所有数学公式**：6个核心公式，均已创建Math_Atom
+- ✅ **分析官方代码**：克隆并分析GoalFlow GitHub仓库
+- ✅ **验证实现一致性**：代码与论文公式完全一致
 
-#### 任务 1.1：精读论文方法部分 ⭐ [未开始]
+**创建的原子资产**：
+1. **`MATH_GOALFLOW_CFM_LOSS_01`** - Conditional Flow Matching损失函数
+2. **`MATH_GOALFLOW_DISTANCE_SCORE_01`** - 目标点距离评分
+3. **`MATH_GOALFLOW_DAC_SCORE_01`** - 可行驶区域合规性评分
+4. **`MATH_GOALFLOW_FINAL_SCORE_01`** - 目标点综合评分
+5. **`MATH_GOALFLOW_INFERENCE_01`** - Flow Matching多步推理
+6. **`MATH_GOALFLOW_TRAJECTORY_SELECT_01`** - 轨迹评分与选择
+
+**代码分析发现**：
+- Goal Point Vocabulary从`voc_path`加载（4096/8192个聚类点）
+- 距离分数和DAC分数通过双MLP预测
+- 损失函数：`imitation_loss`(softmax交叉熵) + `dac_loss`(二元交叉熵)
+- 配置参数：`infer_steps`控制推理步数，`voc_path`指定词汇表
+
+**知识库更新**：
+- **总原子数**: 3 → 9 (+6)
+- **algorithm_atlas.md**：新增"GoalFlow核心数学公式"章节
+- **学习报告**：`reports/2026-02/2026-02-07/GoalFlow_深度分析报告.md`
+
+---
+
+### 5. GoalFlow 深度教学（100%）
+
+**教学日期**：2026-02-08  
+**教学时长**：约2.5小时  
+**教学模式**：高互动 + 苏格拉底式提问
+
+**阶段1：问题驱动理解**（30分钟）
+- ✅ 理解多模态混淆问题：为什么传统Flow Matching生成"平均轨迹"
+- ✅ 理解Goal Point Vocabulary的作用：显式多模态表示
+- ✅ 理解DAC约束的必要性：确保物理可行性
+- ✅ 理解Shadow Vehicle概念：检查整车而非单点
+
+**阶段2：算法原理深入**（1.5小时）
+- ✅ **Distance Score**：softmax归一化、概率解释、交叉熵训练
+- ✅ **DAC Score**：Shadow Vehicle检查、二进制约束、端到端优化
+- ✅ **Final Score**：对数加权组合、尺度平衡、数值稳定性
+- ✅ **条件Flow Matching**：多条件融合、多步推理、归一化处理
+- ✅ **Shadow Trajectories**：处理Goal Point误差、鲁棒性设计
+- ✅ **Trajectory Selection**：Min-Max归一化、多目标优化
+
+**关键突破**：
+- ✅ 完全理解交叉熵损失的计算流程
+- ✅ 理解训练vs推理的根本差异
+- ✅ 理解对数加权的数学原理（w2=0.005的原因）
+- ✅ 理解网络学习的隐式目标："车辆想去哪里？"
+
+**教学记录**：
+- 详细记录：`learning_notes/teaching_sessions/GoalFlow_深度教学_2026-02-08.md`
+
+---
+
+## 🎯 已完成任务：阶段 1 - 深入理解 GoalFlow ✅
+
+### 已完成任务总结
+
+#### 任务 1.1：精读论文方法部分 ⭐ [已完成]
+**完成时间**：2026-02-07  
+**完成状态**：✅ 100%完成
+
+**具体成果**：
+1. ✅ 阅读 `learning_notes/goalflow_method_section.txt`
+2. ✅ 理解三个模块的详细实现：
+   - ✅ Perception Module（BEV 特征提取，使用Transfuser）
+   - ✅ Goal Point Construction Module（核心创新，Vocabulary + Scoring）
+   - ✅ Trajectory Planning Module（Flow Matching，Rectified Flow）
+3. ✅ 提取关键公式和算法伪代码（6个核心公式）
+4. ✅ 绘制架构图和数据流图（在分析报告中）
+
+**输出成果**：
+- ✅ 完成方法部分的详细笔记（本文件第4部分）
+- ✅ 提取所有数学公式（6个Math_Atom原子卡片）
+- ✅ 绘制模块交互图（算法图谱已更新）
+
+**关键问题解答**：
+- **Goal Point Vocabulary构建**：对训练数据轨迹终点聚类，生成4096/8192个聚类中心
+- **评分机制公式**：`δ_final_i = w1·log(δ_dis_i) + w2·log(δ_dac_i)`
+- **Flow Matching条件融合**：`F_all = Concat(F_env, F_goal, F_traj, F_t)` + Transformer
+- **Shadow Trajectories实现**：mask目标点生成影子轨迹，偏差大时使用影子轨迹
+
+---
+
+#### 任务 1.2：分析官方代码 ⭐ [已完成]
+**完成时间**：2026-02-07  
+**完成状态**：✅ 100%完成
+
+**代码仓库**：https://github.com/YvanYin/GoalFlow (已克隆到`/tmp_goalflow/`)
+
+**分析成果**：
+1. ✅ Goal Point Constructor的实现 (`goalflow_model_navi.py`)
+   - ✅ Vocabulary构建：从`voc_path`加载预计算聚类点
+   - ✅ 评分机制代码：双MLP预测距离分数和DAC分数
+   - ✅ 目标点选择：最高`δ_final_i`得分
+
+2. ✅ Flow Matching Generator的实现 (`goalflow_model_traj.py`)
+   - ✅ 网络架构：Transformer + 多条件融合
+   - ✅ 条件输入融合：`F_all = Concat(F_env, F_goal, F_traj, F_t)`
+   - ✅ 训练损失函数：`L_planner = |v_t - v_t_hat|` (L1损失)
+
+3. ✅ Trajectory Scorer的实现 (论文公式，代码中整合)
+   - ✅ 评分公式：`f(τ_i_hat) = -λ1·Φ(f_dis(τ_i_hat)) + λ2·Φ(f_pg(τ_i_hat))`
+   - ✅ Shadow Trajectories：论文描述，代码中通过mask实现
+   - ✅ 最优轨迹选择：最高评分轨迹
+
+**输出成果**：
+- ✅ 代码阅读笔记（分析报告第3部分）
+- ✅ 关键函数的伪代码（原子卡片包含）
+- ✅ 与论文的对应关系（已验证一致）
+
+---
+
+#### 任务 1.3：总结核心算法 [已完成]
+**完成时间**：2026-02-07  
+**完成状态**：✅ 100%完成
+
+**输出成果**：
+- ✅ GoalFlow核心算法流程图（分析报告包含）
+- ✅ 关键模块的伪代码（6个Math_Atom原子卡片）
+- ✅ 与当前实现的详细对比表（分析报告第5部分）
+
+---
+
+## 🎯 当前任务：阶段 2 - 论文复现
+
+### 即将开始的任务（按推荐顺序）
+
+#### 任务 2.1：准备数据集 ⭐⭐⭐
 **优先级**：高  
-**预计时间**：1-2 天
+**预计时间**：3-5天  
+**状态**：待开始
 
 **具体步骤**：
-1. [ ] 阅读 `learning_notes/goalflow_method_section.txt`
-2. [ ] 理解三个模块的详细实现：
-   - [ ] Perception Module（BEV 特征提取）
-   - [ ] Goal Point Construction Module（核心创新）
-   - [ ] Trajectory Planning Module（Flow Matching）
-3. [ ] 提取关键公式和算法伪代码
-4. [ ] 绘制架构图和数据流图
+1. [ ] 决定数据集选择（Navsim vs nuScenes）
+2. [ ] 下载数据集（推荐nuScenes mini，约35GB）
+3. [ ] 安装开发工具包（nuScenes devkit）
+4. [ ] 提取轨迹数据和BEV特征
+5. [ ] 构建Goal Point Vocabulary（聚类轨迹终点）
 
 **输出**：
-- [ ] 完成方法部分的详细笔记
-- [ ] 提取所有数学公式
-- [ ] 绘制模块交互图
+- [ ] 可用的数据加载器
+- [ ] 预处理的数据集
+- [ ] Goal Point Vocabulary文件
 
-**关键问题**：
-- Goal Point Vocabulary 如何构建？（密集采样的具体方法）
-- 评分机制的具体公式是什么？（Distance 和 DAC 的权重）
-- Flow Matching 如何融合多种条件？（BEV + Goal + Ego）
-- Shadow Trajectories 如何实现？
-
----
-
-#### 任务 1.2：分析官方代码 ⭐ [未开始]
+#### 任务 2.2：实现Goal Point Constructor ⭐⭐⭐
 **优先级**：高  
-**预计时间**：1 天
+**预计时间**：2-3天  
+**状态**：待开始
 
-**代码仓库**：https://github.com/YvanYin/GoalFlow
-
-**分析重点**：
-1. [ ] Goal Point Constructor 的实现
-   - 如何构建 Vocabulary
-   - 评分机制的代码实现
-   - 如何选择最优目标点
-
-2. [ ] Flow Matching Generator 的实现
-   - 网络架构（Transformer 还是 MLP？）
-   - 条件输入的融合方式
-   - 训练损失函数
-
-3. [ ] Trajectory Scorer 的实现
-   - 评分公式
-   - Shadow Trajectories 的生成
-   - 最优轨迹的选择
+**具体步骤**：
+1. [ ] 基于分析代码实现Goal Point Construction Module
+2. [ ] 实现距离评分MLP和DAC评分MLP
+3. [ ] 实现综合评分和选择逻辑
+4. [ ] 单元测试和验证
 
 **输出**：
-- [ ] 代码阅读笔记
-- [ ] 关键函数的伪代码
-- [ ] 与论文的对应关系
+- [ ] `goal_point_constructor.py`模块
+- [ ] 训练和推理脚本
+- [ ] 验证结果
 
----
-
-#### 任务 1.3：总结核心算法 [未开始]
+#### 任务 2.3：改进Flow Matching模型 ⭐⭐
 **优先级**：中  
-**预计时间**：半天
+**预计时间**：3-4天  
+**状态**：待开始
+
+**具体步骤**：
+1. [ ] 升级当前Flow Matching实现，添加BEV特征条件
+2. [ ] 集成Goal Point引导
+3. [ ] 改进网络架构（考虑Transformer）
+4. [ ] 更新训练脚本支持真实数据
 
 **输出**：
-- [ ] GoalFlow 核心算法流程图
-- [ ] 关键模块的伪代码
-- [ ] 与当前实现的详细对比表
+- [ ] 改进的`goal_flow_matcher.py`
+- [ ] 多条件融合的Transformer网络
+- [ ] 更新的训练流程
 
 ---
 
 ## 📅 下一步计划
 
-### 本周间（如果继续）
+### 本周已完成 ✅
+**2026-02-07**: GoalFlow深度分析会话
+- ✅ 精读论文方法部分（第3-6页）
+- ✅ 提取6个核心数学公式，创建Math_Atom
+- ✅ 分析官方代码，验证实现一致性
+- ✅ 更新知识库（algorithm_atlas.md）
+- ✅ 生成深度分析报告
 
-**Day 1**：精读论文方法部分
-- 上午：阅读 Perception Module 和 Goal Point Construction
-- 下午：阅读 Trajectory Planning Module
-- 晚上：整理笔记，提取公式
+**总体进度**: 40% → 60% (+20%)
+**阶段1完成**: 理论学习与分析 100% ✅
 
-**Day 2**：分析官方代码
-- 上午：克隆代码，搭建环境
-- 下午：阅读 Goal Point Constructor
-- 晚上：阅读 Flow Matching Generator
 
-**Day 3**：总结和准备
-- 上午：总结核心算法
-- 下午：准备数据集下载
-- 晚上：制定下周计划
-
----
 
 ### 下周计划：阶段 2 开始 - 数据准备
 

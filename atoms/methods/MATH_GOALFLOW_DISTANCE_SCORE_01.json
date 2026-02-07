@@ -1,0 +1,32 @@
+{
+  "asset_id": "MATH_GOALFLOW_DISTANCE_SCORE_01",
+  "category": "Method",
+  "data_status": "Verified_Source_Anchored",
+  "metadata": {
+    "created_at": "2026-02-07T14:06:00Z",
+    "created_by": "Scholar_Internalizer",
+    "version": "1.0",
+    "tags": ["#Goal_Point", "#Scoring", "#Softmax", "#GoalFlow"]
+  },
+  "content": {
+    "technique_name": "目标点距离评分机制",
+    "technical_description": "GoalFlow中用于评估候选目标点与真实目标点接近程度的评分函数，使用softmax归一化的负欧氏距离。",
+    "mathematical_intuition": "该评分函数将欧氏距离映射到[0,1]区间，距离越近的候选点获得越高分数。softmax操作确保所有候选点的分数之和为1，便于比较和选择。",
+    "avp_relevance": "在AVP记忆泊车场景中，准确评估候选车位与目标车位的距离对于生成高质量泊车轨迹至关重要，避免生成偏离目标车位的轨迹。",
+    "assumptions": ["目标点空间是欧几里得空间", "距离度量使用L2范数", "所有候选点都来自Goal Point Vocabulary"],
+    "boundary_conditions": "当候选点词汇表密度不足或真实目标点在词汇表外时，评分机制可能无法选择到足够接近的点。",
+    "key_equations": {
+      "distance_score": "δ_dis_i = exp(-∥g_i - g_gt∥²) / Σ_j exp(-∥g_j - g_gt∥²)"
+    }
+  },
+  "provenance": {
+    "paper_title": "GoalFlow: Goal-Driven Flow Matching for Multimodal Trajectories Generation in End-to-End Autonomous Driving",
+    "paper_location": "Section 3.2.3 Goal Point Construction Module, Page 4, Equation (3)",
+    "atom_path": "/atoms/methods/MATH_GOALFLOW_DISTANCE_SCORE_01.json"
+  },
+  "delta_audit": {
+    "existing_assets": ["CONCEPT_GOALFLOW_FRAMEWORK_01"],
+    "incremental_value": "这是GoalFlow评分机制的核心数学公式之一，相比传统基于规则的距离评估，使用softmax提供了概率化的评分，便于与DAC分数结合。",
+    "contradiction_marked": false
+  }
+}
