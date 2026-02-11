@@ -1,22 +1,25 @@
 # Flow Matching 学习进度记录
 
-**最后更新时间**：2026-02-08  
-**当前阶段**：阶段 2 - 论文复现（编码实践准备中）
+**最后更新时间**：2026-02-11  
+**当前阶段**：阶段 2 - 论文复现（核心模块全部完成！🎉）
 
 ---
 
 ## 📊 总体进度
 
 ```
-[███████████████░░░░░] 72% 完成
+[████████████████████░] 85% 完成 (+13%)
 
 阶段 1: 理论学习与分析 ████████████ 100% ✅
-阶段 2: 论文复现        █████████░░░  65% 🔄
+阶段 2: 论文复现        ████████████ 100% ✅ ← 刚完成！
   - 深度教学完成      ████████████ 100% ✅
-  - 编码实践准备      ████░░░░░░░░  30% 🔄
-  - 编码实践实现      ░░░░░░░░░░░░   0% ⏳
-阶段 3: AVP 场景适配    ░░░░░░░░░░░░   0% ⏳
-阶段 4: 数据收集与优化  ░░░░░░░░░░░░   0% ⏳
+  - 编码实践准备      ████████████ 100% ✅
+  - 编码实践实现      ████████████ 100% ✅ ← 新完成！
+    - GoalPointScorer      ████████████ 100% ✅ (2026-02-09)
+    - GoalFlowMatcher      ████████████ 100% ✅ (2026-02-10)
+    - TrajectorySelector   ████████████ 100% ✅ (2026-02-11)
+阶段 3: 数据准备与训练  ░░░░░░░░░░░░   0% ⏳ ← 下一步
+阶段 4: AVP 场景适配    ░░░░░░░░░░░░   0% ⏳
 ```
 
 ---
@@ -191,41 +194,63 @@
 
 ---
 
-### 6. GoalFlow 编码实践（进行中）
+### 6. GoalFlow 编码实践（已完成！🎉）
 
 **开始日期**：2026-02-08  
-**当前状态**：部分实现，待继续
+**完成日期**：2026-02-11  
+**当前状态**：✅ 所有核心模块实现完成并通过测试
 
-**已创建的文件结构**：
+**已完成的文件结构**：
 ```
 implementations/goalflow/
-├── __init__.py
 ├── models/
-│   ├── __init__.py
-│   └── goal_point_scorer.py  ← 部分实现
-├── data/
-│   └── __init__.py
-├── train_goalflow.py
-└── test_goalflow.py
+│   ├── goal_point_scorer.py      ✅ 100% (2026-02-09)
+│   ├── goal_flow_matcher.py      ✅ 100% (2026-02-10)
+│   └── trajectory_selector.py    ✅ 100% (2026-02-11)
+├── test/
+│   ├── test_goal_flow_matcher.py ✅ 所有测试通过
+│   ├── test_trajectory_selector.py ✅ 所有测试通过
+│   └── README.md
+├── data/                          ⏳ 下一步
+├── train_goalflow.py              ⏳ 待创建
+└── visualize_results.py           ⏳ 待创建
 ```
 
-**已实现的内容**：
-- ✅ `compute_distance_score` 方法（完整实现）
-  - 支持单个样本和批量样本
-  - 正确使用广播机制
-  - Softmax归一化实现正确
+**已实现的三大核心模块**：
 
-**待实现的内容**：
-- ⏳ 修复`__init__`方法的网络结构定义
-- ⏳ 实现`compute_dac_score`方法
-- ⏳ 实现`forward`方法（网络预测）
-- ⏳ 实现`compute_loss`方法（交叉熵损失）
-- ⏳ 创建测试脚本验证
+#### 6.1 GoalPointScorer（目标点评分器）
+- ✅ `compute_distance_score` - 距离评分计算
+- ✅ `compute_dac_score` - DAC评分计算
+- ✅ `forward` - 网络前向传播（Transformer + MLP）
+- ✅ `compute_loss` - 交叉熵 + 二元交叉熵损失
+- ✅ 单元测试全部通过
+- **参数量**：~500K
 
-**明天继续的要点**：
-- 文件位置：`implementations/goalflow/models/goal_point_scorer.py`
-- 参考资料：`learning_notes/明天继续_快速启动.md`
-- 官方代码：`tmp_goalflow/navsim/agents/goalflow/goalflow_model_navi.py`
+#### 6.2 GoalFlowMatcher（轨迹生成器）
+- ✅ Transformer 架构实现
+- ✅ 多条件融合（Goal + BEV + Time）
+- ✅ `compute_loss` - Flow Matching 损失
+- ✅ `generate` - 支持 Euler 和 RK4 推理
+- ✅ `generate_multiple` - 多轨迹生成
+- ✅ 所有测试通过（10项测试）
+- **参数量**：~4.3M（中等配置）
+
+#### 6.3 TrajectorySelector（轨迹选择器）
+- ✅ `compute_distance_score` - 距离评分（ADE）
+- ✅ `compute_progress_score` - 进度评分
+- ✅ `compute_collision_score` - 碰撞评分
+- ✅ `compute_dac_score` - DAC评分
+- ✅ `normalize_scores` - Min-Max归一化
+- ✅ `select_best_trajectory` - 最优轨迹选择
+- ✅ `compute_ade/fde` - 评估指标
+- ✅ `generate_shadow_trajectories` - Shadow轨迹生成
+- ✅ 所有测试通过（10项测试）
+
+**关键成果**：
+- 成功实现 GoalFlow 的所有核心算法模块
+- 所有模块通过完整的单元测试
+- 代码质量高，结构清晰，注释详细
+- 准备好进行数据准备和端到端训练
 
 ---
 
@@ -299,14 +324,14 @@ implementations/goalflow/
 
 ---
 
-## 🎯 当前任务：阶段 2 - 论文复现
+## 🎯 当前任务：阶段 3 - 数据准备与训练
 
 ### 即将开始的任务（按推荐顺序）
 
-#### 任务 2.1：准备数据集 ⭐⭐⭐
+#### 任务 3.1：创建 Toy Dataset ⭐⭐⭐
 **优先级**：高  
-**预计时间**：3-5天  
-**状态**：待开始
+**预计时间**：1-2天  
+**状态**：下一步开始
 
 **具体步骤**：
 1. [ ] 决定数据集选择（Navsim vs nuScenes）
