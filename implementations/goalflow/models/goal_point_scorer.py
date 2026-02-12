@@ -8,9 +8,9 @@ class GoalPointScorer(nn.Module):
                  vocabulary_size: int, 
                  feature_dim: int, 
                  hidden_dim: int,
-                 nhead: int,
+                 num_heads: int,
                  num_layers: int,
-                 in_channels: int,
+                 scene_in_channels: int,
                  kernel_size: int,
                  stride: int,
                  dropout: float=0.1):
@@ -20,7 +20,7 @@ class GoalPointScorer(nn.Module):
         self.vocab_projection = nn.Linear(2, feature_dim)
         vocab_encoder_layer = nn.TransformerEncoderLayer(
             d_model=feature_dim,
-            nhead=nhead,
+            nhead=num_heads,
             dim_feedforward=hidden_dim,
             dropout=dropout,
             batch_first=True
@@ -28,7 +28,7 @@ class GoalPointScorer(nn.Module):
         self.vocab_encoder = nn.TransformerEncoder(vocab_encoder_layer, num_layers)
 
         self.scene_encoder = nn.Conv2d(
-            in_channels=in_channels,
+            in_channels=scene_in_channels,
             out_channels=feature_dim,
             kernel_size=kernel_size,
             stride=stride,
