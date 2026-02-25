@@ -66,7 +66,7 @@ class ToyGoalFlowDataset(Dataset):
             self.bev_features = bev_features[num_train:]
             self.drivable_area = drivable_area[num_train:]
         
-        print(f"✅ Loaded {split} dataset: {len(self)} samples")
+        print(f"[OK] Loaded {split} dataset: {len(self)} samples")
         print(f"   - Trajectory shape: {self.trajectories.shape}")
         print(f"   - Goal shape: {self.goals.shape}")
         print(f"   - BEV feature shape: {self.bev_features.shape}")

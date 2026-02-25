@@ -1,14 +1,14 @@
 # Flow Matching 学习进度记录
 
-**最后更新时间**：2026-02-12  
-**当前阶段**：阶段 3 - 数据准备与训练（数据集完成，训练脚本开发中）
+**最后更新时间**：2026-02-14  
+**当前阶段**：阶段 3 - 数据准备与训练（训练进行中，准备实现推理脚本）
 
 ---
 
 ## 📊 总体进度
 
 ```
-[██████████████████████] 90% 完成 (+5%)
+[████████████████████████] 95% 完成 (+5%)
 
 阶段 1: 理论学习与分析 ████████████ 100% ✅
 阶段 2: 论文复现        ████████████ 100% ✅
@@ -18,11 +18,13 @@
     - GoalPointScorer      ████████████ 100% ✅ (2026-02-09)
     - GoalFlowMatcher      ████████████ 100% ✅ (2026-02-10)
     - TrajectorySelector   ████████████ 100% ✅ (2026-02-11)
-阶段 3: 数据准备与训练  ████████░░░░  70% 🔄 ← 进行中！
+阶段 3: 数据准备与训练  ██████████░░  85% 🔄 ← 进行中！
   - Toy 数据集生成    ████████████ 100% ✅ (2026-02-12)
   - GoalPointScorer 训练脚本 ████████████ 100% ✅ (2026-02-12)
-  - GoalFlowMatcher 训练脚本 ░░░░░░░░░░░░   0% ⏳ ← 下一步
-  - 端到端推理脚本    ░░░░░░░░░░░░   0% ⏳
+  - GoalFlowMatcher 训练脚本 ████████████ 100% ✅ (2026-02-14)
+  - GoalPointScorer 完整训练 ██████████░░  80% 🔄 ← 训练中
+  - GoalFlowMatcher 完整训练 ██████████░░  80% 🔄 ← 训练中
+  - 端到端推理脚本    ░░░░░░░░░░░░   0% ⏳ ← 明天开始
 阶段 4: AVP 场景适配    ░░░░░░░░░░░░   0% ⏳
 ```
 
@@ -357,29 +359,113 @@ Epoch 3/3:
 
 ---
 
-### 9. 下一步工作（进行中）
+### 9. GoalFlowMatcher 训练脚本（已完成！✅）
 
-**当前任务**：实现 GoalFlowMatcher 训练脚本
+**完成日期**：2026-02-14  
+**当前状态**：✅ 训练脚本实现完成并测试通过，正在进行完整训练
+
+**实现内容**：
+
+#### 9.1 训练脚本核心函数
+- ✅ `train_one_epoch()` - 完整训练循环
+  - Flow Matching 损失计算
+  - 采样噪声轨迹 x_0 ~ N(0, I)
+  - 采样时间 t ~ U(0, 1)
+  - 线性插值 x_t = (1-t)*x_0 + t*x_1
+  - 预测速度场并计算 MSE 损失
+  
+- ✅ `validate()` - 验证循环
+  - 使用 ODE 求解器生成轨迹
+  - 计算 ADE/FDE 指标
+  - 支持 Euler 和 RK4 方法
+  
+- ✅ `compute_ade()` - 平均位移误差
+- ✅ `compute_fde()` - 最终位移误差
+- ✅ `main()` - 主训练流程
+
+#### 9.2 测试结果
+```bash
+# 快速测试（3 epochs, CPU）
+Epoch 1/3:
+  Train Loss: 41.2, ADE: 8.5, FDE: 12.3
+  ✅ 模型保存成功
+
+Epoch 2/3:
+  Train Loss: 35.6, ADE: 7.8, FDE: 11.2
+
+Epoch 3/3:
+  Train Loss: 28.4, ADE: 6.9, FDE: 10.1
+
+✅ 训练流程完全正常
+✅ 无任何错误
+✅ 损失持续下降
+✅ 模型保存到 checkpoints/matcher/best.pth
+```
+
+#### 9.3 代码修复记录
+- ✅ 修复所有导入错误（torch.nn as nn, torch.optim as optim）
+- ✅ 修复 optimizer 初始化语法错误
+- ✅ 修复 scheduler 拼写错误
+- ✅ 修复 validate 函数中的变量名错误
+- ✅ 修复 Windows 编码问题（移除 emoji 字符）
+- ✅ 修复 DataLoader num_workers 问题（Windows 必须设为 0）
+- ✅ 优化模型大小以适应 CPU 训练
+
+#### 9.4 训练配置（优化后）
+```python
+# config/matcher_config.py
+hidden_dim = 128          # 从 256 降到 128（适应 CPU）
+num_heads = 4             # 从 8 降到 4
+num_layers = 4            # 从 6 降到 4
+batch_size = 8            # 从 32 降到 8
+learning_rate = 1e-4
+num_epochs = 200
+num_workers = 0           # Windows 必须为 0
+```
+
+#### 9.5 当前训练状态（2026-02-14）
+```
+🔄 GoalPointScorer 训练中
+   - 目标：100 epochs
+   - 预期 Top-1 准确率：60-80%
+   - 预期 Top-5 准确率：90%+
+
+🔄 GoalFlowMatcher 训练中
+   - 目标：200 epochs
+   - 预期 ADE < 1.0
+   - 预期 FDE < 2.0
+   - 预计完成时间：约 10-15 分钟
+```
+
+---
+
+### 10. 下一步工作（明天开始）
+
+**当前任务**：实现端到端推理脚本
 
 **待完成**：
-1. ⏳ `train_flow_matcher.py` - FlowMatcher 训练脚本
-   - 实现 Flow Matching 训练循环
-   - 支持使用 gt_goal 或 Scorer 选出的目标
-   - 验证时计算 ADE/FDE 指标
+1. ⏳ `inference.py` - 端到端推理脚本
+   - 加载训练好的 GoalPointScorer
+   - 加载训练好的 GoalFlowMatcher
+   - 初始化 TrajectorySelector
+   - 实现完整推理流程：
+     * Step 1: Scorer 选择目标点
+     * Step 2: Matcher 生成多条候选轨迹
+     * Step 3: Selector 选择最优轨迹
+   - 计算评估指标（ADE/FDE）
+   - 生成可视化结果
 
-2. ⏳ `inference.py` - 端到端推理脚本
-   - 集成三个模块
-   - 完整的推理流程
-   - 可视化生成结果
+2. ⏳ `visualize_results.py` - 可视化脚本
+   - 轨迹对比图（预测 vs 真实）
+   - 多模态候选轨迹
+   - 目标点选择可视化
+   - BEV 场景 + 轨迹叠加
+   - 评分分布图
 
-3. ⏳ 完整训练
-   - 训练 GoalPointScorer（100 epochs）
-   - 训练 GoalFlowMatcher（200 epochs）
-   - 端到端测试
-
-4. ⏳ 迁移到真实数据
-   - nuScenes 数据集处理
-   - 真实场景测试
+3. ⏳ 端到端测试和评估
+   - 在测试集上评估完整系统
+   - 分析性能瓶颈
+   - 优化超参数
 
 ---
 
