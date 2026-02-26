@@ -10,9 +10,15 @@ import numpy as np
 import argparse
 
 # Set matplotlib backend before importing pyplot to avoid display issues
-import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
-import matplotlib.pyplot as plt
+# Make matplotlib optional (only needed for visualization)
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-interactive backend
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+    plt = None
 
 
 class ToyGoalFlowDataset(Dataset):
@@ -105,6 +111,9 @@ def visualize_sample(dataset: ToyGoalFlowDataset, idx: int = 0, save_path: str =
         idx: Sample index to visualize
         save_path: Optional path to save the figure
     """
+    if not HAS_MATPLOTLIB:
+        raise ImportError("matplotlib is required for visualization. Install it with: pip install matplotlib")
+    
     sample = dataset[idx]
     vocabulary = dataset.get_vocabulary()
     
@@ -169,6 +178,9 @@ def visualize_batch(dataloader: DataLoader, save_path: str = None):
         dataloader: DataLoader instance
         save_path: Optional path to save the figure
     """
+    if not HAS_MATPLOTLIB:
+        raise ImportError("matplotlib is required for visualization. Install it with: pip install matplotlib")
+    
     batch = next(iter(dataloader))
     
     trajectory = batch['trajectory']  # (B, T, 2)

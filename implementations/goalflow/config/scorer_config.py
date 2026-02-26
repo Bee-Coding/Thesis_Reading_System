@@ -28,7 +28,7 @@ class ScorerConfig:
     
     # ==================== 损失权重 ====================
     lambda_dis = 1.0          # 距离评分损失权重
-    lambda_dac = 0.5          # DAC 评分损失权重
+    lambda_dac = 0.005        # DAC 评分损失权重（论文中使用的值）
     
     # ==================== 数据路径 ====================
     data_path = 'data/toy_data.npz'

@@ -148,8 +148,12 @@ def train_one_epoch(model: nn.Module,
         true_dis = model.compute_distance_score(vocabulary, gt_goal)  # (B, N)
         true_dac = model.compute_dac_score(vocabulary, drivable_area)  # (B, N)
 
-        # 5. 计算损失
-        loss, loss_dict = model.compute_loss(pred_dis, pred_dac, true_dis, true_dac)
+        # 5. 计算损失（使用配置文件中的权重）
+        loss, loss_dict = model.compute_loss(
+            pred_dis, pred_dac, true_dis, true_dac,
+            lambda_dis=config.lambda_dis,
+            lambda_dac=config.lambda_dac
+        )
         
         # 6. 反向传播和优化
         optimizer.zero_grad()
@@ -220,8 +224,12 @@ def validate(model,
             true_dis = model.compute_distance_score(vocabulary, gt_goal)  # (B, N)
             true_dac = model.compute_dac_score(vocabulary, drivable_area)  # (B, N)
 
-            # 5. 计算损失
-            loss, loss_dict = model.compute_loss(pred_dis, pred_dac, true_dis, true_dac)
+            # 5. 计算损失（使用配置文件中的权重）
+            loss, loss_dict = model.compute_loss(
+                pred_dis, pred_dac, true_dis, true_dac,
+                lambda_dis=config.lambda_dis,
+                lambda_dac=config.lambda_dac
+            )
 
             # 6. 统计
             total_loss += loss_dict['loss']

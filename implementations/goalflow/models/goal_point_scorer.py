@@ -170,9 +170,23 @@ class GoalPointScorer(nn.Module):
                      pred_dis: float,
                      pred_dac: float,
                      true_dis: float,
-                     true_dac: float) -> float:
+                     true_dac: float,
+                     lambda_dis: float = 1.0,
+                     lambda_dac: float = 0.005) -> float:
         """
         损失函数
+        
+        Args:
+            pred_dis: (B, N) 预测的距离分数
+            pred_dac: (B, N) 预测的 DAC 分数
+            true_dis: (B, N) 真实的距离分数
+            true_dac: (B, N) 真实的 DAC 分数
+            lambda_dis: 距离损失权重（默认 1.0）
+            lambda_dac: DAC 损失权重（默认 0.005）
+        
+        Returns:
+            loss: 总损失
+            loss_dict: 损失字典
         """
 
         # 1.Distance loss:交叉熵
@@ -183,9 +197,7 @@ class GoalPointScorer(nn.Module):
         loss_dac = F.binary_cross_entropy(pred_dac, true_dac, reduction="mean")     # 二元交叉熵
 
         # 3.总损失（加权）
-        w1 = 1.0
-        w2 = 0.005
-        loss = w1 * loss_dis + w2 * loss_dac
+        loss = lambda_dis * loss_dis + lambda_dac * loss_dac
 
         loss_dict = {
             'loss': loss.item(),
