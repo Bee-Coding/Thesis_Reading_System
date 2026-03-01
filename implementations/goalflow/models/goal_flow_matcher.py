@@ -40,6 +40,14 @@ class GoalFlowMatcher(nn.Module):
                  scene_hidden_dim: int=256,
                  t_dim: int=128,
 
+                 # 场景尺寸（用于自动计算下采样和位置编码）
+                 scene_size: Tuple[int, int] = (32, 32),
+
+                 # 场景 token 目标空间尺寸（控制下采样程度）
+                 # 例如 (25, 25) = 625 tokens, (50, 50) = 2500 tokens
+                 # 设为 None 则使用旧逻辑（下采样到 ≤16）
+                 scene_token_size: Optional[Tuple[int, int]] = None,
+
                  # 其他
                  activation: str='gelu'
                  ):
@@ -57,14 +65,75 @@ class GoalFlowMatcher(nn.Module):
                                           nn.GELU(),
                                           nn.Linear(goal_hidden_dim, d_model))
         # 1.3 场景编码器
-        self.scene_conv = nn.Sequential(nn.Conv2d(scene_channels, scene_hidden_dim, kernel_size=3, stride=1, padding=1),
-                                        nn.BatchNorm2d(scene_hidden_dim),
-                                        nn.GELU(),
-                                        nn.Conv2d(scene_hidden_dim, d_model, kernel_size=3, stride=1, padding=1),
-                                        nn.BatchNorm2d(d_model),
-                                        nn.GELU())
-        # 位置编码（用于Scene tokens）
-        self.scene_pos_embed = nn.Parameter(torch.randn(1, 32*32, d_model) * 0.02)
+        # 新策略：用 CNN 提取特征，然后用 AdaptiveAvgPool2d 控制输出空间尺寸
+        # 这样可以灵活控制 scene token 数量，同时保留足够的空间信息
+        h, w = scene_size
+        
+        if scene_token_size is not None:
+            # 新方案：CNN 特征提取 + AdaptiveAvgPool2d
+            # CNN 只做特征提取（少量下采样），最终用 pool 精确控制输出尺寸
+            target_h, target_w = scene_token_size
+            conv_layers = []
+            in_ch = scene_channels
+            
+            # 逐步提升通道数，适度下采样（每次 stride=2 减半空间尺寸）
+            # 只在空间尺寸远大于目标时才下采样
+            current_h, current_w = h, w
+            while current_h > target_h * 3 or current_w > target_w * 3:
+                # 空间尺寸还远大于目标的3倍，用 stride=2 下采样
+                out_ch = min(scene_hidden_dim, max(in_ch * 2, 32))
+                conv_layers.extend([
+                    nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm2d(out_ch),
+                    nn.GELU(),
+                ])
+                in_ch = out_ch
+                current_h = (current_h + 1) // 2
+                current_w = (current_w + 1) // 2
+            
+            # 最后一层投影到 d_model（stride=1，不下采样）
+            conv_layers.extend([
+                nn.Conv2d(in_ch, d_model, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(d_model),
+                nn.GELU(),
+            ])
+            self.scene_conv = nn.Sequential(*conv_layers)
+            
+            # AdaptiveAvgPool2d 精确控制输出空间尺寸
+            self.scene_pool = nn.AdaptiveAvgPool2d((target_h, target_w))
+            self._scene_out_h = target_h
+            self._scene_out_w = target_w
+        else:
+            # 旧方案：持续下采样直到空间尺寸 ≤ 16
+            conv_layers = []
+            in_ch = scene_channels
+            while h > 16 or w > 16:
+                out_ch = min(scene_hidden_dim, in_ch * 2) if in_ch < scene_hidden_dim else scene_hidden_dim
+                conv_layers.extend([
+                    nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1),
+                    nn.BatchNorm2d(out_ch),
+                    nn.GELU(),
+                ])
+                in_ch = out_ch
+                h = (h + 1) // 2
+                w = (w + 1) // 2
+            conv_layers.extend([
+                nn.Conv2d(in_ch, d_model, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(d_model),
+                nn.GELU(),
+            ])
+            self.scene_conv = nn.Sequential(*conv_layers)
+            self.scene_pool = None  # 不使用 pool
+            self._scene_out_h = h
+            self._scene_out_w = w
+        
+        num_scene_tokens = self._scene_out_h * self._scene_out_w
+
+        # 位置编码（用于Scene tokens，大小匹配下采样后的空间尺寸）
+        self.scene_pos_embed = nn.Parameter(torch.randn(1, num_scene_tokens, d_model) * 0.02)
+
+        # 轨迹时间步位置编码（让模型区分第1个点和第12个点）
+        self.traj_pos_embed = nn.Parameter(torch.randn(1, num_traj_points, d_model) * 0.02)
 
         # 1.4 时间编码器
         self.time_embedding = SinusoidalEmbedding(t_dim)
@@ -127,7 +196,9 @@ class GoalFlowMatcher(nn.Module):
         goal_tokens = goal_feat.unsqueeze(1)    # (B, 1, d_model)
 
         # 2. Scene tokens
-        scene_feat = self.scene_conv(scene)     # (B, d_model, H, W)
+        scene_feat = self.scene_conv(scene)     # (B, d_model, H', W')
+        if self.scene_pool is not None:
+            scene_feat = self.scene_pool(scene_feat)  # (B, d_model, target_h, target_w)
         scene_tokens = scene_feat.flatten(2).transpose(1, 2) # (B, HW, d_model)
         
         # 添加位置编码
@@ -160,8 +231,9 @@ class GoalFlowMatcher(nn.Module):
             v_pred: (B, T, 2)   预测的速度场
         """
         B, T, _ = x_t.shape
-        # 1. 轨迹编码
+        # 1. 轨迹编码 + 时间步位置编码
         traj_tokens = self.traj_encoder(x_t)        # (B, T, d_model)
+        traj_tokens = traj_tokens + self.traj_pos_embed[:, :T, :]  # 添加位置编码，让模型区分不同时间步
         # 2. 条件编码
         goal_tokens, scene_tokens, time_tokens = self.encode_conditions(goal, scene, time)
         # 3. 拼接所有token

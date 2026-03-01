@@ -41,8 +41,8 @@ def extract_agent_trajectories(
     scene_token: str,
     history_frames: int = 4,
     future_frames: int = 12,
-    min_movement: float = 1.0,
-    max_distance: float = 50.0,
+    min_movement: float = 0.5,
+    max_distance: float = 60.0,
     vehicle_categories: Optional[List[str]] = None
 ) -> Dict[str, np.ndarray]:
     """
@@ -160,8 +160,6 @@ def extract_agent_trajectories(
         >>> trajs = extract_agent_trajectories(nusc, scene_token)
         >>> print(f"提取了 {len(trajs['goals'])} 条轨迹")
     """
-    # TODO: 在这里实现你的代码
-    # 提示: 返回格式应该是一个字典，包含上述所有键
     
     # 默认车辆类别
     if vehicle_categories is None:
@@ -181,6 +179,8 @@ def extract_agent_trajectories(
     all_goals = []
     all_scene_tokens = []
     all_sample_tokens = []
+    all_agent_translations = []   # 每个 agent 当前帧的全局位置 (3,)
+    all_agent_rotations = []      # 每个 agent 当前帧的全局旋转 (4,) quaternion
     
     # ========================================
     # 获取场景
@@ -229,37 +229,47 @@ def extract_agent_trajectories(
                 current_ann = nusc.get('sample_annotation', current_ann['next'])
                 position = current_ann['translation'][:2]
                 future_traj.append(position)
-            if len(history_traj) != history_frames or len(future_frames) != future_frames:
+            if len(history_traj) != history_frames or len(future_traj) != future_frames:
                 continue
 
             # 转换为numpy数组
             history_traj = np.array(history_traj)
             future_traj = np.array(future_traj)
 
-            # 转到ego系
-            history_ego = nuscenes_utils.global_to_ego(history_traj, 
-                                                       ego_translation,
-                                                       ego_rotation)
-            future_ego = nuscenes_utils.global_to_ego(future_traj, 
-                                                       ego_translation,
-                                                       ego_rotation)
+            # 转到 agent 自身坐标系（agent-centered，而非 ego-centered）
+            # 这样每个 agent 的轨迹和 BEV 都以自身为中心，避免同帧 agent 共享相同 BEV
+            agent_translation = np.array(ann['translation'])  # agent 全局位置
+            agent_rotation = Quaternion(ann['rotation'])       # agent 全局旋转
+            
+            history_agent = nuscenes_utils.global_to_ego(history_traj, 
+                                                          agent_translation,
+                                                          agent_rotation)
+            future_agent = nuscenes_utils.global_to_ego(future_traj, 
+                                                         agent_translation,
+                                                         agent_rotation)
             
             # 检查移动距离
-            total_distance = nuscenes_utils.compute_trajectory_length(future_ego)
+            total_distance = nuscenes_utils.compute_trajectory_length(future_agent)
             if total_distance < min_movement:
                 continue
 
-            # 检查是否在范围内
-            goal_distance = np.linalg.norm(future_ego[-1])
-            if goal_distance > max_distance:
+            # 检查是否在范围内（用 ego 坐标系判断 agent 是否在 ego 附近）
+            agent_pos_ego = nuscenes_utils.global_to_ego(
+                np.array(ann['translation'][:2]).reshape(1, 2),
+                ego_translation, ego_rotation
+            )
+            if np.linalg.norm(agent_pos_ego) > max_distance:
                 continue
 
-            all_history.append(history_traj)
-            all_future.append(future_traj)
-            # 以真实轨迹最后一个点作为目标点
-            all_goals.append(future_traj[-1])
+            all_history.append(history_agent)
+            all_future.append(future_agent)
+            # 以真实轨迹最后一个点作为目标点（agent-centered 坐标）
+            all_goals.append(future_agent[-1])
             all_scene_tokens.append(scene_token)
             all_sample_tokens.append(sample_token)
+            # 保存 agent 当前帧的全局位姿（用于生成 agent-centered BEV）
+            all_agent_translations.append(ann['translation'])  # [x, y, z]
+            all_agent_rotations.append(ann['rotation'])        # [w, x, y, z]
             
         sample_token = sample['next']
     # ========================================
@@ -269,7 +279,9 @@ def extract_agent_trajectories(
         'future': np.array(all_future),        # (N, future_frames, 2)
         'goals': np.array(all_goals),          # (N, 2)
         'scene_tokens': all_scene_tokens,      # List[str]
-        'sample_tokens': all_sample_tokens     # List[str]
+        'sample_tokens': all_sample_tokens,    # List[str]
+        'agent_translations': all_agent_translations,  # List of [x,y,z] — agent 全局位置
+        'agent_rotations': all_agent_rotations         # List of [w,x,y,z] — agent 全局旋转
     }
 
 
@@ -406,91 +418,75 @@ def rasterize_map(
         map_layers = ['lane', 'road_segment', 'walkway']
     
     # ========================================
-    # 1. 创建空白图像
-    bev_image = np.zeros((map_size[0], map_size[1], 3), dtype=np.uint8)
+    # 为每个通道创建独立的图像（避免 OpenCV 切片问题）
+    lane_image = np.zeros((map_size[0], map_size[1]), dtype=np.uint8)
+    road_image = np.zeros((map_size[0], map_size[1]), dtype=np.uint8)
+    walkway_image = np.zeros((map_size[0], map_size[1]), dtype=np.uint8)
     
-    # 2. 获取 ego 位置
+    # 获取 ego 位置
     ego_x = ego_pose['translation'][0]
     ego_y = ego_pose['translation'][1]
     ego_translation = np.array(ego_pose['translation'])
     ego_rotation = Quaternion(ego_pose['rotation'])
     
-    # 3. 获取附近的车道线
+    # 处理车道线 (Channel 0)
     lane_records = nusc_map.get_records_in_radius(
         ego_x, ego_y, map_range, ['lane', 'lane_connector']
     )
     
-    # 4. 处理每条车道线
     for record_token in lane_records['lane']:
-        
         lane_record = nusc_map.get('lane', record_token)
-        
-        # 获取车道线的多边形
         polygon_token = lane_record['polygon_token']
         polygon = nusc_map.extract_polygon(polygon_token)
-        exterior_coords = np.array(polygon.exterior.coords)[:, 2]   # 只取x,y
+        exterior_coords = np.array(polygon.exterior.coords)[:, :2]  # 只取 x, y
         
-        # 转换到 ego 坐标系
         coords_ego = nuscenes_utils.global_to_ego(exterior_coords, ego_translation, ego_rotation)
-        
-        # 转换到像素坐标
         coords_pixel = nuscenes_utils.ego_to_pixel(coords_ego, map_range, map_size)
-        
-        # 绘制到图像
         coords_pixel = coords_pixel.astype(np.int32)
-        cv2.polylines(bev_image[:, :, 0], [coords_pixel],
-                      isClosed=True, color=255, thickness=2)
+        
+        cv2.polylines(lane_image, [coords_pixel], isClosed=True, color=255, thickness=2)
     
-    # 4.1 处理道路边界（Channel 1）
+    # 处理道路边界 (Channel 1)
     road_records = nusc_map.get_records_in_radius(
         ego_x, ego_y, map_range, ['road_segment']
     )
-
+    
     for record_token in road_records['road_segment']:
-
         road_record = nusc_map.get('road_segment', record_token)
-
         polygon_token = road_record['polygon_token']
         polygon = nusc_map.extract_polygon(polygon_token)
-        exterior_coords = np.array(polygon.exterior.coords)[:, 2]   # 只取x,y
-        # 转换到 ego 坐标系
-        coords_ego = nuscenes_utils.global_to_ego(exterior_coords, ego_translation, ego_rotation)
+        exterior_coords = np.array(polygon.exterior.coords)[:, :2]  # 只取 x, y
         
-        # 转换到像素坐标
+        coords_ego = nuscenes_utils.global_to_ego(exterior_coords, ego_translation, ego_rotation)
         coords_pixel = nuscenes_utils.ego_to_pixel(coords_ego, map_range, map_size)
-
-        # 填充道路区域
-        cv2.fillPoly(bev_image[:, :, 1], [coords_pixel], color=255)
+        coords_pixel = coords_pixel.astype(np.int32)
+        
+        cv2.fillPoly(road_image, [coords_pixel], color=255)
     
-    # 4.2 处理人行道（Channel 2）
+    # 处理人行道 (Channel 2)
     walkway_records = nusc_map.get_records_in_radius(
         ego_x, ego_y, map_range, ['walkway']
     )
-
+    
     for record_token in walkway_records['walkway']:
-
         walkway_record = nusc_map.get('walkway', record_token)
-
         polygon_token = walkway_record['polygon_token']
         polygon = nusc_map.extract_polygon(polygon_token)
-        exterior_coords = np.array(polygon.exterior.coords)[:, 2]   # 只取x,y
-        # 转换到 ego 坐标系
-        coords_ego = nuscenes_utils.global_to_ego(exterior_coords, ego_translation, ego_rotation)
+        exterior_coords = np.array(polygon.exterior.coords)[:, :2]  # 只取 x, y
         
-        # 转换到像素坐标
+        coords_ego = nuscenes_utils.global_to_ego(exterior_coords, ego_translation, ego_rotation)
         coords_pixel = nuscenes_utils.ego_to_pixel(coords_ego, map_range, map_size)
-
-        # 填充道路区域
-        cv2.fillPoly(bev_image[:, :, 2], [coords_pixel], color=255)
+        coords_pixel = coords_pixel.astype(np.int32)
+        
+        cv2.fillPoly(walkway_image, [coords_pixel], color=255)
     
-    # 5. 归一化到 [0, 1]
+    # 合并三个通道
+    bev_image = np.stack([lane_image, road_image, walkway_image], axis=0)  # (3, H, W)
+    
+    # 归一化到 [0, 1]
     bev_image = bev_image.astype(np.float32) / 255.0
-    
-    # 6. 转换为 (C, H, W) 格式
-    bev_image = bev_image.transpose(2, 0, 1)
     # ========================================
     
-    # 返回格式示例
     return bev_image  # (3, H, W)
 
 
@@ -549,20 +545,33 @@ def build_vocabulary(
         >>> vocab = build_vocabulary(goals, n_clusters=256)
         >>> print(vocab.shape)  # (256, 2)
     """
-    # TODO: 在这里实现你的代码
     
     # ========================================
-    # TODO: 在这里实现 K-means 聚类
-    # ========================================
+    from sklearn.cluster import KMeans
     
-    raise NotImplementedError(
-        "请实现 build_vocabulary() 函数！\n"
-        "这是最简单的函数，只需要几行代码。\n"
-        "参考上面的代码提示。"
+    n_samples = len(goal_points)
+    actual_clusters = min(n_clusters, n_samples)
+    if actual_clusters < n_clusters:
+        print(f" 样本数（{n_samples}) < 词汇表大小 ({n_clusters})")
+        print(f" 自动调整词汇表大小为：（{actual_clusters})")
+    
+    # 创建 KMeans 对象
+    kmeans = KMeans(
+        n_clusters=actual_clusters,
+        random_state=seed,
+        n_init=10,  # 运行 10 次，选择最佳结果
+        max_iter=300
     )
     
-    # 返回格式示例
-    # return vocabulary  # (n_clusters, 2)
+    # 拟合数据
+    kmeans.fit(goal_points)
+    
+    # 获取聚类中心
+    vocabulary = kmeans.cluster_centers_
+    
+    # 返回词汇表
+    return vocabulary   # (n_clusters, 2)
+    # ========================================
 
 
 # ==================== 辅助函数（已实现） ====================
@@ -619,19 +628,18 @@ def process_scene(
         bev_features = np.zeros((n_trajectories, 3, config.bev_height, config.bev_width))
     else:
         for i in tqdm(range(n_trajectories), desc="  生成 BEV 特征"):
-            sample_token = trajectories['sample_tokens'][i]
-            sample = nusc.get('sample', sample_token)
+            # 构建 agent-centered 位姿（用 agent 的全局位置/旋转代替 ego 位姿）
+            # 这样每个 agent 得到以自身为中心的 BEV，而非共享 ego-centered BEV
+            agent_pose = {
+                'translation': trajectories['agent_translations'][i],  # [x, y, z]
+                'rotation': trajectories['agent_rotations'][i]         # [w, x, y, z]
+            }
             
-            # 获取 ego 位姿
-            ego_pose_token = sample['data']['LIDAR_TOP']
-            sample_data = nusc.get('sample_data', ego_pose_token)
-            ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
-            
-            # 栅格化地图
+            # 栅格化地图（以 agent 为中心）
             try:
                 bev = rasterize_map(
                     nusc_map=nusc_map,
-                    ego_pose=ego_pose,
+                    ego_pose=agent_pose,  # 传入 agent 位姿而非 ego 位姿
                     map_size=(config.bev_height, config.bev_width),
                     map_range=config.bev_range,
                     map_layers=config.map_layers
@@ -725,7 +733,38 @@ def preprocess_nuscenes(
     print(f"  Goals shape: {merged_data['goals'].shape}")
     print(f"  BEV shape: {merged_data['bev_features'].shape}")
     
-    # 6. 构建词汇表
+    # 5.5 轨迹标准化 (StandardScaler)
+    # 使用 (x - mean) / std 让数据分布接近 N(0,1)，与 Flow Matching 噪声尺度匹配
+    # norm_stats 可以从外部传入（val/test 复用 train 的统计量），也可以自动计算
+    print(f"\n轨迹标准化...")
+    print(f"  标准化前 - Future X: [{merged_data['future'][...,0].min():.2f}, {merged_data['future'][...,0].max():.2f}]")
+    print(f"  标准化前 - Future Y: [{merged_data['future'][...,1].min():.2f}, {merged_data['future'][...,1].max():.2f}]")
+    
+    # 如果有外部传入的统计量（val/test 复用 train 的），就用它；否则自己算
+    norm_stats = getattr(config, '_norm_stats', None)
+    if norm_stats is None:
+        # 从 future 轨迹计算 mean 和 std（按坐标维度）
+        all_points = merged_data['future'].reshape(-1, 2)  # (N*T, 2)
+        traj_mean = all_points.mean(axis=0)  # (2,)
+        traj_std = all_points.std(axis=0)    # (2,)
+        # 防止 std 为 0
+        traj_std = np.maximum(traj_std, 1e-6)
+        norm_stats = {'mean': traj_mean, 'std': traj_std}
+        print(f"  计算标准化统计量: mean={traj_mean}, std={traj_std}")
+    else:
+        traj_mean = norm_stats['mean']
+        traj_std = norm_stats['std']
+        print(f"  使用外部标准化统计量: mean={traj_mean}, std={traj_std}")
+    
+    # 对 history, future, goals 统一标准化
+    merged_data['history'] = (merged_data['history'] - traj_mean) / traj_std
+    merged_data['future'] = (merged_data['future'] - traj_mean) / traj_std
+    merged_data['goals'] = (merged_data['goals'] - traj_mean) / traj_std
+    
+    print(f"  标准化后 - Future X: [{merged_data['future'][...,0].min():.2f}, {merged_data['future'][...,0].max():.2f}], std={merged_data['future'][...,0].std():.2f}")
+    print(f"  标准化后 - Future Y: [{merged_data['future'][...,1].min():.2f}, {merged_data['future'][...,1].max():.2f}], std={merged_data['future'][...,1].std():.2f}")
+    
+    # 6. 构建词汇表（使用标准化后的 goals）
     print("\n构建 goal 词汇表...")
     vocabulary = build_vocabulary(
         merged_data['goals'],
@@ -752,7 +791,11 @@ def preprocess_nuscenes(
         'bev_size': (config.bev_height, config.bev_width),
         'bev_range': config.bev_range,
         'vocab_size': config.vocab_size,
-        'scenes': scenes
+        'scenes': scenes,
+        'normalized': True,
+        'norm_type': 'standard',           # 标准化类型
+        'traj_mean': norm_stats['mean'],   # (2,) 推理时反标准化: x_real = x_norm * std + mean
+        'traj_std': norm_stats['std'],     # (2,)
     }
     
     with open(os.path.join(output_dir, 'metadata.pkl'), 'wb') as f:

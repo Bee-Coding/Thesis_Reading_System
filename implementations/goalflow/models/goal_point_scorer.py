@@ -42,8 +42,7 @@ class GoalPointScorer(nn.Module):
                                       nn.ReLU(),
                                       *[nn.Sequential(nn.Linear(hidden_dim, hidden_dim), 
                                       nn.ReLU()) for _ in range(num_layers)],
-                                      nn.Linear(hidden_dim, 1),
-                                      nn.ReLU())
+                                      nn.Linear(hidden_dim, 1))
         self.dac_MLP = nn.Sequential(nn.Linear(feature_dim*2, hidden_dim), 
                                     nn.ReLU(),
                                     *[hidden_layer for _ in range(num_layers)],

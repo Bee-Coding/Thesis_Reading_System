@@ -22,6 +22,7 @@ nuScenes 数据预处理脚本
 
 import sys
 import os
+import pickle
 
 # 添加项目路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -43,7 +44,7 @@ def main():
     # 创建输出目录
     config.create_dirs()
     
-    # 预处理训练集
+    # ========== 预处理训练集 ==========
     print("\n" + "=" * 70)
     print("预处理训练集")
     print("=" * 70)
@@ -71,12 +72,27 @@ def main():
         traceback.print_exc()
         return
     
-    # 预处理验证集
+    # 读取 train 的标准化统计量，供 val/test 复用
+    train_metadata_path = os.path.join(train_output_dir, 'metadata.pkl')
+    with open(train_metadata_path, 'rb') as f:
+        train_metadata = pickle.load(f)
+    
+    train_norm_stats = {
+        'mean': train_metadata['traj_mean'],
+        'std': train_metadata['traj_std'],
+    }
+    print(f"\n训练集标准化统计量: mean={train_norm_stats['mean']}, std={train_norm_stats['std']}")
+    print("val/test 将复用此统计量")
+    
+    # ========== 预处理验证集（复用 train 的 mean/std）==========
     print("\n" + "=" * 70)
     print("预处理验证集")
     print("=" * 70)
     val_output_dir = os.path.join(config.processed_data_dir, 'val')
     os.makedirs(val_output_dir, exist_ok=True)
+    
+    # 将 train 的统计量挂到 config 上，让 preprocess_nuscenes 复用
+    config._norm_stats = train_norm_stats
     
     try:
         preprocess_nuscenes(
@@ -89,7 +105,7 @@ def main():
     except Exception as e:
         print(f"\n❌ 验证集预处理失败: {e}")
     
-    # 预处理测试集
+    # ========== 预处理测试集（复用 train 的 mean/std）==========
     print("\n" + "=" * 70)
     print("预处理测试集")
     print("=" * 70)

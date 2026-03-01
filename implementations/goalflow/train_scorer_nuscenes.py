@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import os
 import sys
+import pickle
 from tqdm import tqdm
 
 # 添加路径
@@ -80,28 +81,38 @@ def train_one_epoch(model, train_loader, vocabulary, optimizer, device, config):
         bev = batch['bev'].to(device)  # (B, 3, H, W)
         gt_goal = batch['goal'].to(device)  # (B, 2)
 
-        # 计算目标标签
-        target_idx = compute_target_labels(vocabulary, gt_goal)
-
         # 前向传播
         B = bev.shape[0]
         vocab_expanded = vocabulary.unsqueeze(0).expand(B, -1, -1)  # (B, N, 2)
         
-        # 注意: GoalPointScorer 需要 (B, N, 2) 的 goal_points 和 (B, C, H, W) 的 bev_feature
-        pred_scores = model(vocab_expanded, bev)  # (B, N)
+        # 从 BEV 提取可行驶区域
+        # Channel 1 是道路边界 (road_segment)，作为可行驶区域
+        drivable_area = bev[:, 1, :, :]  # (B, H, W)
+        
+        # GoalPointScorer 返回 (pred_dis, pred_dac)
+        pred_dis, pred_dac = model(vocab_expanded, bev)  # (B, N), (B, N)
 
-        # 计算损失 (简化版，只使用分类损失)
-        loss_fn = nn.CrossEntropyLoss()
-        loss = loss_fn(pred_scores, target_idx)
+        # 计算真实标签
+        true_dis = model.compute_distance_score(vocab_expanded, gt_goal)  # (B, N)
+        true_dac = model.compute_dac_score(vocab_expanded, drivable_area)  # (B, N)
+
+        # 计算损失
+        loss, loss_dict = model.compute_loss(
+            pred_dis, pred_dac, true_dis, true_dac,
+            lambda_dis=config.scorer_lambda_dis,
+            lambda_dac=config.scorer_lambda_dac
+        )
 
         # 反向传播
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        # 统计
+        # 统计准确率（使用距离分数）
+        target_idx = true_dis.argmax(dim=-1)  # (B,)
+        acc = compute_accuracy(pred_dis, target_idx, k=1)
+        
         total_loss += loss.item()
-        acc = compute_accuracy(pred_scores, target_idx, k=1)
         total_acc += acc
         num_batches += 1
 
@@ -124,18 +135,32 @@ def validate(model, val_loader, vocabulary, device, config):
             bev = batch['bev'].to(device)
             gt_goal = batch['goal'].to(device)
 
-            target_idx = compute_target_labels(vocabulary, gt_goal)
-
             B = bev.shape[0]
             vocab_expanded = vocabulary.unsqueeze(0).expand(B, -1, -1)
-            pred_scores = model(vocab_expanded, bev)
+            
+            # 从 BEV 提取可行驶区域
+            # Channel 1 是道路边界 (road_segment)，作为可行驶区域
+            drivable_area = bev[:, 1, :, :]  # (B, H, W)
+            
+            # GoalPointScorer 返回 (pred_dis, pred_dac)
+            pred_dis, pred_dac = model(vocab_expanded, bev)
 
-            loss_fn = nn.CrossEntropyLoss()
-            loss = loss_fn(pred_scores, target_idx)
+            # 计算真实标签
+            true_dis = model.compute_distance_score(vocab_expanded, gt_goal)
+            true_dac = model.compute_dac_score(vocab_expanded, drivable_area)
 
+            # 计算损失
+            loss, loss_dict = model.compute_loss(
+                pred_dis, pred_dac, true_dis, true_dac,
+                lambda_dis=config.scorer_lambda_dis,
+                lambda_dac=config.scorer_lambda_dac
+            )
+
+            # 统计准确率
+            target_idx = true_dis.argmax(dim=-1)
             total_loss += loss.item()
-            total_top1_acc += compute_accuracy(pred_scores, target_idx, k=1)
-            total_top5_acc += compute_accuracy(pred_scores, target_idx, k=5)
+            total_top1_acc += compute_accuracy(pred_dis, target_idx, k=1)
+            total_top5_acc += compute_accuracy(pred_dis, target_idx, k=5)
             num_batches += 1
 
             pbar.set_postfix({'loss': loss.item()})
@@ -199,11 +224,15 @@ def main():
     # 创建模型
     print("\n创建模型...")
     model = GoalPointScorer(
-        bev_channels=config.bev_channels,
-        hidden_dim=config.scorer_hidden_dim,
-        num_heads=config.scorer_num_heads,
-        num_layers=config.scorer_num_layers,
-        dropout=config.scorer_dropout
+        vocabulary_size=len(vocabulary),              # 词汇表大小
+        feature_dim=config.scorer_hidden_dim,         # 特征嵌入维度
+        hidden_dim=config.scorer_hidden_dim,          # 隐藏层维度
+        num_heads=config.scorer_num_heads,            # 注意力头数
+        num_layers=config.scorer_num_layers,          # Transformer 层数
+        scene_in_channels=config.bev_channels,        # BEV 输入通道数 (3)
+        kernel_size=3,                                # CNN 卷积核大小
+        stride=2,                                     # CNN 卷积步长
+        dropout=config.scorer_dropout                 # Dropout 比例
     ).to(device)
 
     print(f"模型参数量: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")
@@ -221,8 +250,7 @@ def main():
             optimizer,
             mode='min',
             factor=config.scheduler_factor,
-            patience=config.scheduler_patience,
-            verbose=True
+            patience=config.scheduler_patience
         )
 
     # 创建 checkpoint 目录
@@ -259,14 +287,26 @@ def main():
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 checkpoint_path = os.path.join(config.scorer_checkpoint_dir, 'best_model.pth')
-                torch.save({
+                # 保存模型 + 归一化统计量 + 词汇表（便于审计兼容性）
+                save_dict = {
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'val_loss': val_loss,
                     'val_top1_acc': val_top1_acc,
                     'val_top5_acc': val_top5_acc,
-                }, checkpoint_path)
+                    'vocabulary': vocabulary.cpu().numpy(),  # 训练时使用的词汇表
+                }
+                # 如果有归一化统计量，也保存进去
+                metadata_path = os.path.join(train_dir, 'metadata.pkl')
+                if os.path.exists(metadata_path):
+                    with open(metadata_path, 'rb') as f:
+                        metadata = pickle.load(f)
+                    if 'traj_mean' in metadata:
+                        save_dict['traj_mean'] = metadata['traj_mean']
+                        save_dict['traj_std'] = metadata['traj_std']
+                        save_dict['norm_type'] = metadata.get('norm_type', 'unknown')
+                torch.save(save_dict, checkpoint_path)
                 print(f"✅ 保存最佳模型: {checkpoint_path}")
 
         # 定期保存

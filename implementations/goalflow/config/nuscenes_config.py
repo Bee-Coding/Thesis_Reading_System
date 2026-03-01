@@ -27,8 +27,8 @@ class NuScenesConfig:
     future_frames = 12  # 6秒未来 (12 frames @ 2Hz)
     
     # 轨迹过滤条件
-    min_movement = 1.0  # 最小移动距离 (m)，过滤静止物体
-    max_distance = 50.0  # 最大距离 (m)，只考虑 ego 车附近的 agent
+    min_movement = 0.5  # 最小移动距离 (m)，过滤静止物体
+    max_distance = 60.0  # 最大距离 (m)，只考虑 ego 车附近的 agent
     
     # ==================== BEV 特征参数 ====================
     # BEV 图像尺寸
@@ -44,7 +44,7 @@ class NuScenesConfig:
     map_layers = ['lane', 'road_segment', 'walkway']
     
     # ==================== Goal 词汇表参数 ====================
-    vocab_size = 256  # K-means 聚类数量
+    vocab_size = 32  # K-means 聚类数量
     vocab_seed = 42   # 随机种子
     
     # ==================== 模型参数 ====================
@@ -57,10 +57,16 @@ class NuScenesConfig:
     # GoalFlowMatcher
     matcher_hidden_dim = 256
     matcher_num_heads = 8
-    matcher_num_layers = 4
+    matcher_num_layers = 6       # 增加到6层（原4层），提升模型容量
     matcher_dropout = 0.1
-    matcher_num_steps = 10  # ODE solver steps
-    matcher_noise_std = 1.0  # Initial noise std
+    matcher_num_steps = 20       # ODE solver steps（原10步），更精细的积分
+    matcher_noise_std = 1.0      # Initial noise std
+    
+    # 场景 token 目标空间尺寸（控制 BEV 下采样程度）
+    # (25, 25) = 625 tokens — 平衡信息保留和计算量
+    # (50, 50) = 2500 tokens — 更多空间信息但更慢
+    # None = 旧逻辑（下采样到 ≤16x16）
+    scene_token_size = (25, 25)  # 625 scene tokens
     
     # ==================== 训练参数 ====================
     # 通用
@@ -70,15 +76,15 @@ class NuScenesConfig:
     
     # Scorer 训练
     scorer_batch_size = 16
-    scorer_num_epochs = 50
+    scorer_num_epochs = 100
     scorer_learning_rate = 1e-4
     scorer_weight_decay = 1e-5
     scorer_lambda_dis = 1.0  # Distance loss weight
-    scorer_lambda_dac = 0.005  # DAC loss weight
+    scorer_lambda_dac = 0.01  # DAC loss weight
     
     # Matcher 训练
-    matcher_batch_size = 8
-    matcher_num_epochs = 50
+    matcher_batch_size = 32
+    matcher_num_epochs = 100
     matcher_learning_rate = 1e-4
     matcher_weight_decay = 1e-5
     
